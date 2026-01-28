@@ -6,10 +6,10 @@ param (
 # Fix for "Fake" PowerShell errors: Tell Git to send stderr to stdout
 $env:GIT_REDIRECT_STDERR_TO_STDOUT = "1"
 
-# 1. Setup paths and filename
+# 1. Setup paths and filename (yyyy-MM-dd-xxx.log)
 $FolderName = Split-Path $ParentFolder -Leaf
 $DateStamp = Get-Date -Format "yyyy-MM-dd"
-$LogFile = Join-Path $PSScriptRoot "$DateStamp-$FolderName.txt"
+$LogFile = Join-Path $PSScriptRoot "$DateStamp-$FolderName.log"
 
 # Counters for summary
 $TotalFound = 0
@@ -21,7 +21,7 @@ $TotalFailed = 0
 $Header = @"
 ======================================================
   Git Sync Tool: $FolderName
-  Log: $DateStamp-$FolderName.txt
+  Log: $DateStamp-$FolderName.log
 ======================================================
 "@
 Write-Host $Header -ForegroundColor Cyan
