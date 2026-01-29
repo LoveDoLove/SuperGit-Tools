@@ -228,7 +228,7 @@ Add-Type -AssemblyName System.Windows.Forms
                     <Border Background="#2D2D30" Padding="10,5" CornerRadius="4,4,0,0">
                         <Grid>
                             <TextBlock Text="Real-Time Log" Foreground="White" FontWeight="Bold"/>
-                            <Button Name="BtnCloseLog" Content="✕" HorizontalAlignment="Right" Background="Transparent" Foreground="#FF5252" Width="30" Padding="0"/>
+                            <Button Name="BtnCloseLog" Content="X" HorizontalAlignment="Right" Background="Transparent" Foreground="#FF5252" Width="30" Padding="0"/>
                         </Grid>
                     </Border>
                     <ScrollViewer Name="LogScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Background="#1E1E1E">
@@ -395,7 +395,7 @@ Function Sync-Repositories {
             
             # Notify Start
             $queue.Enqueue(@{ Type = "Progress"; Path = $path; Index = $i; Total = $total })
-            Log-Msg "PROCESSING: $path"
+            Log-Msg "[$i/$total] PROCESSING: $path"
             
             # Do Work
             $status = "Failed"
