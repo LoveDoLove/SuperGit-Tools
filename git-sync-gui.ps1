@@ -350,7 +350,11 @@ $controls = @(
     "BtnExportLogs", "BtnSettings"
 )
 foreach ($id in $controls) {
-    Set-Variable -Name $id -Value $window.FindName($id) -Scope Script
+    $control = $window.FindName($id)
+    if ($control -eq $null) {
+        Write-Host "WARNING: Control '$id' not found in XAML" -ForegroundColor Yellow
+    }
+    Set-Variable -Name $id -Value $control -Scope Script
 }
 
 # --------------------------------------------------
@@ -660,14 +664,27 @@ Function Refresh-AllRepoStatus {
 }
 
 Function Update-Statistics {
-    $successCount = ($Script:AllRepos | Where-Object { $_.Status -eq "Synced" -or $_.Status -eq "Clean" }).Count
-    $failedCount = ($Script:AllRepos | Where-Object { $_.Status -eq "Error" -or $_.Status -eq "Failed" }).Count
-    $dirtyCount = ($Script:AllRepos | Where-Object { $_.IsDirty }).Count
-    
-    $TxtCountFound.Text = $Script:AllRepos.Count.ToString()
-    $TxtCountSuccess.Text = $successCount.ToString()
-    $TxtCountFailed.Text = $failedCount.ToString()
-    $TxtCountDirty.Text = $dirtyCount.ToString()
+    try {
+        $successCount = ($Script:AllRepos | Where-Object { $_.Status -eq "Synced" -or $_.Status -eq "Clean" }).Count
+        $failedCount = ($Script:AllRepos | Where-Object { $_.Status -eq "Error" -or $_.Status -eq "Failed" }).Count
+        $dirtyCount = ($Script:AllRepos | Where-Object { $_.IsDirty }).Count
+        
+        if ($Script:TxtCountFound -ne $null -and $Script:TxtCountFound.Text -ne $null) { 
+            $Script:TxtCountFound.Text = $Script:AllRepos.Count.ToString() 
+        }
+        if ($Script:TxtCountSuccess -ne $null -and $Script:TxtCountSuccess.Text -ne $null) { 
+            $Script:TxtCountSuccess.Text = $successCount.ToString() 
+        }
+        if ($Script:TxtCountFailed -ne $null -and $Script:TxtCountFailed.Text -ne $null) { 
+            $Script:TxtCountFailed.Text = $failedCount.ToString() 
+        }
+        if ($Script:TxtCountDirty -ne $null -and $Script:TxtCountDirty.Text -ne $null) { 
+            $Script:TxtCountDirty.Text = $dirtyCount.ToString() 
+        }
+    }
+    catch {
+        # Silently ignore statistics update errors
+    }
 }
 
 Function Apply-Filter {
