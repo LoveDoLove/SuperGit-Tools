@@ -4,7 +4,7 @@
 
 - **App Name:** SuperGit-Tools
 - **CLI Tool:** `git-sync.ps1` (Automation focused, interactive CLI)
-- **GUI Tool:** `git-sync-gui.ps1` (Visual interface, "Friendly Horizon" design)
+- **GUI Tool:** `git-sync-gui.ps1` (Visual interface, "Friendly Horizon" design, WPF/XAML)
 
 ## Design Philosophy: "Friendly Horizon"
 
@@ -28,7 +28,12 @@ Any UI/UX development (especially for `git-sync-gui.ps1` or web dashboards) must
   - Implement `try/catch` blocks for all external command executions (like `git`).
   - Maintain the logging format: `[TIME] [COMMAND/RESULT] Message`.
 - **GUI (WPF/Windows Forms in PS):**
-  - Ensure XAML/Forms code reflects "Friendly Horizon" (modern styling, not default gray controls).
+  - **Framework:** Use **WPF (XAML)** over Windows Forms for better styling capabilities.
+  - **Styling:** Adhere to "Friendly Horizon":
+    - **Window:** Chromeless (`WindowStyle="None"`, `AllowsTransparency="True"`).
+    - **Theme:** Dark mode (`#1E1E1E` background, `#FFFFFF` text).
+    - **Controls:** Custom styled buttons (no default gray). Hover effects are mandatory.
+  - **Async:** Use **Runspaces** or `[System.Windows.Threading.Dispatcher]` to keep the UI responsive during Git operations.
 
 ### 3. Feature Requests
 

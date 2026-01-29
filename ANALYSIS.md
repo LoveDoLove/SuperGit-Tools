@@ -11,7 +11,8 @@
 - **Root Directory:** `d:\Projects\CloudProjects\SuperGit-Tools`
 - **Key Files:**
   - `git-sync.ps1`: CLI-based Git synchronization script.
-  - `git-sync-gui.ps1`: (Missing/Planned) GUI-based synchronization tool.
+  - `git-sync.ps1`: CLI-based Git synchronization script.
+  - `git-sync-gui.ps1`: (Planned) Powershell + WPF GUI-based synchronization tool.
   - `.git`, `.github`: version control and GitHub configuration.
   - `logs`: Log files named `yyyy-MM-dd-FolderName.log`.
 
@@ -45,8 +46,13 @@
   - Modern typography (e.g., Inter, Roboto).
   - Smooth gradients and micro-animations.
   - "Friendly" user interaction (clear prompts, helpful feedback).
+  - **Technical Stack (GUI):**
+    - PowerShell 5.1+ hosting WPF (XAML).
+    - Chromeless Window (`WindowStyle="None"`) with custom title bar.
+    - Dark Theme colors (`#1E1E1E` background).
 
 ## 5. Status & Observations
 
 - `git-sync.ps1` is fully functional and robust.
-- `git-sync-gui.ps1` is currently not present in the root directory but is a key part of the app suite description. Future prompts regarding this should verify its existence or provide implementation details if it needs to be created.
+- `git-sync.ps1` is fully functional and robust.
+- `git-sync-gui.ps1` is in the **detailed planning phase**. Implementation will use PowerShell Runspaces for async operations and XAML for the UI.
