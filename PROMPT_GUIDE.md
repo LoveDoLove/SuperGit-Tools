@@ -8,12 +8,15 @@
 
 ## Design Philosophy: "Friendly Horizon"
 
-Any UI/UX development (especially for `git-sync-gui.ps1` or web dashboards) must adhere to:
+Any UI/UX development (especially for `git-sync-gui.ps1` or web dashboards) must adhere to these Modern UI principles:
 
-1.  **Aesthetics:** High-end, premium feel. Use glassmorphism, gradients, and dark mode by default.
-2.  **Interaction:** Dynamic feedback (hover states, transitions). Code should not feel static.
+1.  **Aesthetics:** High-end, premium feel.
+    - **Backgrounds:** Use `LinearGradientBrush` (Deep dark blue/gray: `#1E1E1E` to `#252526`) instead of flat solid colors.
+    - **Controls:** Use **Card Layouts** for lists (Border with rounded corners, padding, slight border brush).
+    - **Indicators:** Use colored shapes (Ellipse) for status instead of text boxes.
+2.  **Interaction:** Dynamic feedback (hover states on cards and buttons). Code should not feel static.
 3.  **Tone:** Friendly, helpful, and clear. Avoid cryptic error messages.
-4.  **Content Policy:** **NO EMOJIS!** Do not use any emoji characters in the source code or UI strings (e.g., `🚀`, `📜`) as they cause encoding/parsing errors in PowerShell 5.1. Use standard text or iconography instead.
+4.  **Content Policy:** **NO EMOJIS!** Do not use any emoji characters in the source code or UI strings (e.g., `🚀`, `📜`) as they cause encoding/parsing errors in PowerShell 5.1. Use standard text or iconography (using shapes/paths) instead.
 
 ## Prompting Rules for Future Development
 
@@ -22,7 +25,7 @@ Any UI/UX development (especially for `git-sync-gui.ps1` or web dashboards) must
 - **Rule:** Always analyze the existing file structure and `ANALYSIS.md` before proposing changes.
 - **Why:** To ensure new features integrate seamlessly with existing logging and error handling mechanisms.
 
-### 2. Code Style & consistency
+### 2. Code Style & Consistency
 
 - **PowerShell:**
   - Use `Join-Path` for cross-platform compatibility.
@@ -30,10 +33,11 @@ Any UI/UX development (especially for `git-sync-gui.ps1` or web dashboards) must
   - Maintain the logging format: `[TIME] [COMMAND/RESULT] Message`.
 - **GUI (WPF/Windows Forms in PS):**
   - **Framework:** Use **WPF (XAML)** over Windows Forms for better styling capabilities.
-  - **Styling:** Adhere to "Friendly Horizon":
+  - **Styling:** Adhere to "Friendly Horizon" Modern Standards:
     - **Window:** Chromeless (`WindowStyle="None"`, `AllowsTransparency="True"`).
-    - **Theme:** Dark mode (`#1E1E1E` background, `#FFFFFF` text).
-    - **Controls:** Custom styled buttons (no default gray). Hover effects are mandatory.
+    - **Theme:** Dark mode with Gradients.
+    - **Layout:** Use `Grid` and `DockPanel` for structure. Use `DataTemplate` in `ListBox` for Card views.
+    - **Feedback:** Use `ProgressBar` for long-running operations.
   - **Async:** Use **Runspaces** or `[System.Windows.Threading.Dispatcher]` to keep the UI responsive during Git operations.
 
 ### 3. Feature Requirements (Must-Have)
