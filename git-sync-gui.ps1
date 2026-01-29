@@ -30,16 +30,21 @@ Add-Type -AssemblyName System.Windows.Forms
 
     <Window.Resources>
         <!-- Colors & Brushes -->
-        <SolidColorBrush x:Key="WindowBackground" Color="#1E1E1E"/>
-        <SolidColorBrush x:Key="SidebarBackground" Color="#252526"/>
+        <LinearGradientBrush x:Key="WindowBackground" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#1E1E1E" Offset="0.0"/>
+            <GradientStop Color="#252526" Offset="1.0"/>
+        </LinearGradientBrush>
+        
+        <SolidColorBrush x:Key="SidebarBackground" Color="#202020"/>
         <SolidColorBrush x:Key="ControlBackground" Color="#333337"/>
         <SolidColorBrush x:Key="TextPrimary" Color="#FFFFFF"/>
-        <SolidColorBrush x:Key="TextSecondary" Color="#CCCCCC"/>
-        <SolidColorBrush x:Key="AccentColor" Color="#007ACC"/>
-        <SolidColorBrush x:Key="SuccessColor" Color="#4CAF50"/>
-        <SolidColorBrush x:Key="WarningColor" Color="#FFC107"/>
-        <SolidColorBrush x:Key="ErrorColor" Color="#FF5252"/>
-        <SolidColorBrush x:Key="HoverOverlay" Color="#3FFFFFFF"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#AAAAAA"/>
+        
+        <!-- Action Button Gradient -->
+        <LinearGradientBrush x:Key="AccentGradient" StartPoint="0,0" EndPoint="1,0">
+            <GradientStop Color="#007ACC" Offset="0.0"/>
+            <GradientStop Color="#005A9E" Offset="1.0"/>
+        </LinearGradientBrush>
 
         <!-- Button Style -->
         <Style TargetType="Button">
@@ -68,7 +73,7 @@ Add-Type -AssemblyName System.Windows.Forms
             </Setter>
         </Style>
 
-        <!-- Custom Scrollbar (Minimalist) -->
+        <!-- Custom Scrollbar -->
         <Style TargetType="ScrollBar">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="#444444"/>
@@ -81,7 +86,7 @@ Add-Type -AssemblyName System.Windows.Forms
             <Grid.RowDefinitions>
                 <RowDefinition Height="40"/>
                 <RowDefinition Height="*"/>
-                <RowDefinition Height="30"/>
+                <RowDefinition Height="35"/>
             </Grid.RowDefinitions>
 
             <!-- 1. Custom Title Bar -->
@@ -97,7 +102,7 @@ Add-Type -AssemblyName System.Windows.Forms
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,10,0">
-                    <Button Name="MinimizeButton" Content="_" Width="40" Background="Transparent"/>
+                    <Button Name="MinimizeButton" Content="_" Width="40" Background="Transparent" Foreground="#CCCCCC"/>
                     <Button Name="CloseButton" Content="X" Width="40" Background="Transparent" Foreground="#FF5252" FontWeight="Bold"/>
                 </StackPanel>
             </Grid>
@@ -112,62 +117,43 @@ Add-Type -AssemblyName System.Windows.Forms
                 <!-- Sidebar Controls -->
                 <Border Grid.Column="0" Background="{StaticResource SidebarBackground}" Padding="15">
                     <StackPanel>
-                        <Label Content="ACTIONS" Foreground="#888888" FontSize="10" FontWeight="Bold" Margin="0,0,0,5"/>
+                        <Label Content="ACTIONS" Foreground="#666666" FontSize="10" FontWeight="Bold" Margin="0,0,0,5"/>
                         
                         <Button Name="BtnSelectFolder" Content="Select Folder" Height="35" HorizontalContentAlignment="Left"/>
                         <Button Name="BtnScan" Content="Scan Subfolders" Height="35" HorizontalContentAlignment="Left" Margin="5,0,5,5"/>
-                        <Button Name="BtnSyncAll" Content="Sync All" Height="35" HorizontalContentAlignment="Left" Background="#007ACC"/>
+                        <Button Name="BtnSyncAll" Content="Sync All" Height="35" HorizontalContentAlignment="Left" Background="{StaticResource AccentGradient}"/>
 
                         <Separator Background="#333333" Margin="0,15"/>
 
-                        <Label Content="STATS" Foreground="#888888" FontSize="10" FontWeight="Bold" Margin="0,0,0,5"/>
+                        <Label Content="STATS" Foreground="#666666" FontSize="10" FontWeight="Bold" Margin="0,0,0,5"/>
                         <StackPanel Orientation="Horizontal" Margin="5">
                             <TextBlock Text="Found:" Foreground="{StaticResource TextSecondary}" Width="60"/>
                             <TextBlock Name="TxtCountFound" Text="0" Foreground="White" FontWeight="Bold"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="5">
                             <TextBlock Text="Success:" Foreground="{StaticResource TextSecondary}" Width="60"/>
-                            <TextBlock Name="TxtCountSuccess" Text="0" Foreground="{StaticResource SuccessColor}" FontWeight="Bold"/>
+                            <TextBlock Name="TxtCountSuccess" Text="0" Foreground="#4CAF50" FontWeight="Bold"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>
 
-                <!-- Repo List -->
-                <DockPanel Grid.Column="1" Margin="20">
+                <!-- Repo List (Card Layout) -->
+                <DockPanel Grid.Column="1" Margin="20,10,20,10">
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
                         <TextBlock Text="Repositories" FontSize="20" FontWeight="Light" Foreground="White"/>
-                        <TextBlock Name="TxtCurrentPath" Text="No folder selected" Foreground="#666666" FontStyle="Italic"/>
+                        <TextBlock Name="TxtCurrentPath" Text="No folder selected" Foreground="#666666" FontStyle="Italic" TextTrimming="CharacterEllipsis"/>
                     </StackPanel>
 
-                    <!-- Header for List -->
-                    <Grid DockPanel.Dock="Top" Background="#2D2D30" Height="30">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="100"/>
-                            <ColumnDefinition Width="100"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="Repo Name" Foreground="#AAAAAA" VerticalAlignment="Center" Margin="10,0"/>
-                        <TextBlock Grid.Column="1" Text="Status" Foreground="#AAAAAA" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                        <TextBlock Grid.Column="2" Text="Action" Foreground="#AAAAAA" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                    </Grid>
-
-                    <!-- The List Box -->
                     <ListBox Name="RepoList" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem">
                                 <Setter Property="Background" Value="Transparent"/>
-                                <Setter Property="Padding" Value="5"/>
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="Margin" Value="0,0,0,8"/> <!-- Spacing between cards -->
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="ListBoxItem">
-                                            <Border Name="ItemBorder" BorderThickness="0,0,0,1" BorderBrush="#333333" Background="{TemplateBinding Background}" CornerRadius="2">
-                                                <ContentPresenter/>
-                                            </Border>
-                                            <ControlTemplate.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="ItemBorder" Property="Background" Value="#2D2D30"/>
-                                                </Trigger>
-                                            </ControlTemplate.Triggers>
+                                            <ContentPresenter/>
                                         </ControlTemplate>
                                     </Setter.Value>
                                 </Setter>
@@ -175,31 +161,26 @@ Add-Type -AssemblyName System.Windows.Forms
                         </ListBox.ItemContainerStyle>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Grid Height="40">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="100"/>
-                                        <ColumnDefinition Width="100"/>
-                                    </Grid.ColumnDefinitions>
-                                    
-                                    <!-- Name -->
-                                    <StackPanel VerticalAlignment="Center" Margin="5,0">
-                                        <TextBlock Text="{Binding Name}" Foreground="White" FontWeight="SemiBold" FontSize="13"/>
-                                        <TextBlock Text="{Binding Path}" Foreground="#666666" FontSize="10"/>
-                                    </StackPanel>
+                                <Border Background="#2D2D30" CornerRadius="6" Padding="10" BorderBrush="#3E3E42" BorderThickness="1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        
+                                        <!-- Left Info -->
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" Foreground="White" FontWeight="SemiBold" FontSize="13"/>
+                                            <TextBlock Text="{Binding Path}" Foreground="#888888" FontSize="10" TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
 
-                                    <!-- Status -->
-                                    <Border Grid.Column="1" Background="{Binding StatusColor}" CornerRadius="10" 
-                                            Height="20" Width="80" VerticalAlignment="Center" HorizontalAlignment="Center">
-                                        <TextBlock Text="{Binding Status}" Foreground="White" FontSize="10" 
-                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    </Border>
-                                    
-                                    <!-- Sync Button Placeholder (In actual implementation, we might use commands) -->
-                                    <!-- For simple listbox binding, specific button logic is tricky in pure PS XAML without code-behind events per item. 
-                                         We'll rely on selecting an item or 'Sync All' for version 1. -->
-                                    <TextBlock Grid.Column="2" Text="Ready" Foreground="#444444" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                </Grid>
+                                        <!-- Right Status -->
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Status}" Foreground="#AAAAAA" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                            <Ellipse Width="12" Height="12" Fill="{Binding StatusColor}"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
@@ -210,29 +191,35 @@ Add-Type -AssemblyName System.Windows.Forms
             <Border Grid.Row="2" Background="#007ACC" CornerRadius="0,0,8,8">
                 <Grid>
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Name="StatusText" Text="Ready" Foreground="White" VerticalAlignment="Center" Margin="15,0"/>
-                    <Button Name="BtnToggleLog" Grid.Column="1" Content="Show Log" Background="Transparent" Foreground="White" Margin="0,0,10,0" FontWeight="Bold"/>
+                    
+                    <TextBlock Name="StatusText" Text="Ready" Foreground="White" VerticalAlignment="Center" Margin="15,0" FontWeight="SemiBold"/>
+                    
+                    <!-- Progress Bar -->
+                    <ProgressBar Name="SyncProgressBar" Grid.Column="1" Height="6" Margin="10,0" Background="#33000000" Foreground="White" BorderThickness="0" Value="0" Maximum="100"/>
+                    
+                    <Button Name="BtnToggleLog" Grid.Column="2" Content="Show Log" Background="Transparent" Foreground="White" Margin="0,0,10,0" FontWeight="Bold"/>
                 </Grid>
             </Border>
 
-            <!-- 4. Log Overlay (Hidden by Default) -->
-            <Border Name="LogOverlay" Grid.Row="0" Grid.RowSpan="2" Background="#F21E1E1E" Margin="10,40,10,0" Visibility="Collapsed" BorderBrush="#333333" BorderThickness="1" CornerRadius="4">
+            <!-- 4. Log Overlay -->
+            <Border Name="LogOverlay" Grid.Row="0" Grid.RowSpan="2" Background="#F21E1E1E" Margin="20,50,20,10" Visibility="Collapsed" BorderBrush="#333333" BorderThickness="1" CornerRadius="6">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <Border Background="#2D2D30" Padding="10,5" CornerRadius="4,4,0,0">
+                    <Border Background="#2D2D30" Padding="10,8" CornerRadius="6,6,0,0">
                         <Grid>
-                            <TextBlock Text="Real-Time Log" Foreground="White" FontWeight="Bold"/>
+                            <TextBlock Text="Activity Log" Foreground="White" FontWeight="Bold"/>
                             <Button Name="BtnCloseLog" Content="X" HorizontalAlignment="Right" Background="Transparent" Foreground="#FF5252" Width="30" Padding="0"/>
                         </Grid>
                     </Border>
                     <ScrollViewer Name="LogScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Background="#1E1E1E">
-                        <TextBox Name="LogTextBox" Background="Transparent" Foreground="#00FF00" FontFamily="Consolas" BorderThickness="0" IsReadOnly="True" TextWrapping="Wrap" Padding="5"/>
+                        <TextBox Name="LogTextBox" Background="Transparent" Foreground="#00FF00" FontFamily="Consolas" BorderThickness="0" IsReadOnly="True" TextWrapping="Wrap" Padding="10"/>
                     </ScrollViewer>
                 </Grid>
             </Border>
@@ -260,7 +247,7 @@ $controls = @(
     "TitleBarArea", "MinimizeButton", "CloseButton", 
     "BtnSelectFolder", "BtnScan", "BtnSyncAll", 
     "TxtCountFound", "TxtCountSuccess", "TxtCurrentPath", "RepoList", "StatusText",
-    "BtnToggleLog", "LogOverlay", "BtnCloseLog", "LogTextBox", "LogScroll"
+    "BtnToggleLog", "LogOverlay", "BtnCloseLog", "LogTextBox", "LogScroll", "SyncProgressBar"
 )
 foreach ($id in $controls) {
     Set-Variable -Name $id -Value $window.FindName($id) -Scope Script
@@ -347,6 +334,7 @@ Function Sync-Repositories {
     # Disable UI
     $BtnSyncAll.IsEnabled = $false
     $BtnScan.IsEnabled = $false
+    $SyncProgressBar.Value = 0
     Update-Status "Starting background sync..."
 
     # Reset Stats
@@ -473,6 +461,10 @@ Function Process-SyncQueue {
                 $repo.Status = "Syncing..."
                 $repo.StatusColor = "#007ACC"
             }
+            # Update Progress Bar
+            $percent = [math]::Round(($msg.Index / $msg.Total) * 100)
+            $SyncProgressBar.Value = $percent
+
             Update-Status "Syncing [$($msg.Index)/$($msg.Total)]: $($msg.Path | Split-Path -Leaf)"
             $RepoList.Items.Refresh()
         }
@@ -504,6 +496,7 @@ Function Process-SyncQueue {
         
         $BtnSyncAll.IsEnabled = $true
         $BtnScan.IsEnabled = $true
+        $SyncProgressBar.Value = 100
         Update-Status "Sync Completed!"
         $RepoList.Items.Refresh()
     }
