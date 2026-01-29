@@ -70,34 +70,32 @@
   - **Dispatcher:** `DispatcherTimer` polls the queue to update UI elements safely.
   - **Virtualization:** Enabled for repository list to handle large numbers of repositories efficiently.
 
-## 5. Design System: Friendly Horizon v2.0
+## 5. Design System: Friendly Horizon v2.0 (Light Theme)
 
-- **Concept:** A user-centric, aesthetically pleasing design language following modern dark theme best practices.
+- **Concept:** A user-centric, aesthetically pleasing design language following modern light theme best practices (clean, airy, professional).
 - **Implementation (GUI v2.0):**
   - **Visuals:**
-    - **Background:** Enhanced gradient using soft grays (`#121212` → `#1C1C1C`) instead of pure black.
+    - **Background:** Subtle gradient using white to off-white (`#FFFFFF` → `#F5F5F5`).
     - **Color Palette:**
-      - Sidebar: `#161616`
-      - Cards: `#1E1E1E`
-      - Controls: `#2A2A2E`
-      - Text: `#FFFFFF` (primary), `#B0B0B0` (secondary), `#707070` (muted)
-    - **Status Colors:**
-      - Clean: `#4CAF50` (green)
-      - Dirty: `#FFC107` (amber)
-      - Ahead: `#2196F3` (blue)
-      - Behind: `#FF9800` (orange)
-      - Diverged: `#9C27B0` (purple)
-      - Error: `#FF5252` (red)
-      - Syncing: `#00BCD4` (cyan)
-      - Pending: `#757575` (gray)
+      - Sidebar: `#F0F0F0` (Light Gray)
+      - Cards: `#FFFFFF` (White) with Border `#E0E0E0`
+      - Controls: `#E8E8E8` (Control Background)
+      - Text: `#1A1A1A` (Primary), `#616161` (Secondary), `#9E9E9E` (Muted)
+    - **Status Colors:** High correlation with traffic light system but accessible:
+      - Clean: `#4CAF50` (Green)
+      - Dirty: `#FFC107` (Amber)
+      - Ahead: `#2196F3` (Blue)
+      - Behind: `#FF9800` (Orange)
+      - Diverged: `#9C27B0` (Purple)
+      - Error: `#FF5252` (Red)
     - **Layout:** Enhanced card-based repository list with:
       - Rounded corners (`CornerRadius="6"`)
-      - Hover effects (brightness increase, border color change)
+      - Hover effects (Light gray background `#F8F8F8`, darker border `#BDBDBD`)
       - Multi-line information display (name, branch, path, status)
-    - **Controls:** Custom styled buttons with hover and press animations.
+    - **Controls:** Custom styled buttons with hover (`#D0D0D0`) and press (`#0078D4`) animations.
     - **Interactive Elements:** Context menus, search box, filter dropdowns, sort options.
   - **Typography:**
-    - Repository name: 14px SemiBold
+    - Repository name: 14px SemiBold (`#1A1A1A`)
     - Branch info: 11px Italic
     - Path: 10px Regular
     - Consistent font hierarchy throughout
@@ -118,12 +116,12 @@
     - Individual repository actions via context menu
     - Comprehensive keyboard shortcuts
   - **UI/UX:**
-    - Modern dark theme following 2024/2025 design best practices
-    - Enhanced color palette using soft grays instead of pure black
-    - Smooth hover effects and animations
-    - 8 distinct status colors for better visual feedback
-    - Improved typography and spacing
-    - Enhanced statistics panel with 4 metrics
+    - **Modern Light Theme:** following 2024/2025 design best practices (Clean, Professional).
+    - **Enhanced Color Palette:** Soft whites and grays for reduced eye strain in light environments.
+    - **Smooth Interaction:** Hover effects and animations for dynamic feel.
+    - **8 Distinct Status Colors:** For better visual feedback.
+    - **Improved Typography:** Clear hierarchy with dark text on light backgrounds.
+    - **Enhanced Statistics Panel:** With 4 metrics (Found, Success, Failed, Dirty).
   - **Performance:**
     - UI virtualization for large repository lists
     - Async status checking in background
@@ -137,7 +135,7 @@
     - Export log functionality
     - Git installation validation
   - **Technical:**
-    - Codebase uses strict text-only UI elements (no emojis) for compatibility
-    - Logging coverage captures all command output and progress steps
-    - Error handling with detailed messages
+    - **Robust Error Handling:** Comprehensive `try-catch` blocks with double null checks for UI controls.
+    - Codebase uses strict text-only UI elements (no emojis) for compatibility.
+    - Logging coverage captures all command output and progress steps.
     - Settings panel placeholder for future customization

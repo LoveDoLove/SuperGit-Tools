@@ -6,27 +6,23 @@
 - **CLI Tool:** `git-sync.ps1` v1.0 (Automation focused, interactive CLI)
 - **GUI Tool:** `git-sync-gui.ps1` v2.0 (Visual interface, "Friendly Horizon" design, WPF/XAML)
 
-## Design Philosophy: "Friendly Horizon" v2.0
+## Design Philosophy: "Friendly Horizon" v2.0 (Light Theme)
 
 Any UI/UX development (especially for `git-sync-gui.ps1` or web dashboards) must adhere to these Modern UI principles:
 
-1.  **Aesthetics:** High-end, premium feel following 2024/2025 dark mode best practices.
-    - **Backgrounds:** Use soft grays (`#121212`, `#1C1C1C`, `#1E1E1E`) instead of pure black (`#000000`).
-    - **Gradients:** Use subtle `LinearGradientBrush` for depth and visual interest.
+1.  **Aesthetics:** Clean, airy, and professional Light Theme.
+    - **Backgrounds:** Use subtle gradients (`#FFFFFF` to `#F5F5F5`) instead of flat white.
     - **Color Palette:**
-      - Sidebar: `#161616`
-      - Cards: `#1E1E1E`
-      - Controls: `#2A2A2E`
-      - Text: Primary `#FFFFFF`, Secondary `#B0B0B0`, Muted `#707070`
-    - **Status Colors:** Use distinct, accessible colors:
-      - Clean: `#4CAF50` (green)
-      - Dirty: `#FFC107` (amber)
-      - Ahead: `#2196F3` (blue)
-      - Behind: `#FF9800` (orange)
-      - Diverged: `#9C27B0` (purple)
-      - Error: `#FF5252` (red)
-      - Syncing: `#00BCD4` (cyan)
-      - Pending: `#757575` (gray)
+      - Sidebar: `#F0F0F0` (Light Gray)
+      - Cards: `#FFFFFF` (White) with light borders (`#E0E0E0`).
+      - Text: Primary `#1A1A1A` (Almost Black), Secondary `#616161`, Muted `#9E9E9E`.
+    - **Status Colors:** Use distinct, accessible colors (Traffic Light system + Blue/Purple):
+      - Clean: `#4CAF50` (Green)
+      - Dirty: `#FFC107` (Amber)
+      - Ahead: `#2196F3` (Blue)
+      - Behind: `#FF9800` (Orange)
+      - Diverged: `#9C27B0` (Purple)
+      - Error: `#FF5252` (Red)
     - **Controls:** Use **Card Layouts** for lists (Border with rounded corners, padding, hover effects).
     - **Indicators:** Use colored shapes (Ellipse) for status instead of text boxes.
 2.  **Interaction:** Dynamic feedback (hover states on cards and buttons, smooth transitions). Code should not feel static.
@@ -47,10 +43,11 @@ Any UI/UX development (especially for `git-sync-gui.ps1` or web dashboards) must
   - Implement `try/catch` blocks for all external command executions (like `git`).
   - Maintain the logging format: `[TIME] [COMMAND/RESULT] Message`.
 - **GUI (WPF/Windows Forms in PS):**
+  - **Robust Control Access:** **CRITICAL RULE**. When accessing UI controls by name (e.g., `$TxtCountSuccess`), ALWAYS perform double null checks for both the variable and the property (e.g., `if ($Txt -ne $null -and $Txt.Text -ne $null)`). Use `try-catch` blocks around UI update logic.
   - **Framework:** Use **WPF (XAML)** over Windows Forms for better styling capabilities.
   - **Styling:** Adhere to "Friendly Horizon" Modern Standards:
     - **Window:** Chromeless (`WindowStyle="None"`, `AllowsTransparency="True"`).
-    - **Theme:** Dark mode with Gradients.
+    - **Theme:** Light mode with Gradients.
     - **Layout:** Use `Grid` and `DockPanel` for structure. Use `DataTemplate` in `ListBox` for Card views.
     - **Feedback:** Use `ProgressBar` for long-running operations.
   - **Async:** Use **Runspaces** or `[System.Windows.Threading.Dispatcher]` to keep the UI responsive during Git operations.
@@ -71,7 +68,8 @@ When updating or fixing the app, ensure these core features remain intact:
 
 ### 4. UI/UX Best Practices (v2.0)
 
-- **Avoid Pure Black:** Use `#121212` or similar soft grays for backgrounds to reduce eye strain.
+- **Light Theme Logic:** Ensure dark text is used on light backgrounds.
+- **Avoid Pure White:** Use `#F5F5F5` or similar soft whites for large areas to reduce glare.
 - **Contrast Ratios:** Maintain WCAG-compliant contrast ratios for accessibility.
 - **Hover Effects:** Provide visual feedback on interactive elements (cards, buttons).
 - **Status Feedback:** Use distinct colors for different repository states.
