@@ -92,7 +92,7 @@ Add-Type -AssemblyName System.Windows.Forms
                 </Grid.ColumnDefinitions>
                 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="15,0,0,0">
-                    <TextBlock Text="🚀 SuperGit Tools" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="14"/>
+                    <TextBlock Text="SuperGit Tools" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="14"/>
                     <TextBlock Text=" | Friendly Horizon" Foreground="{StaticResource TextSecondary}" Margin="10,0,0,0" FontSize="12" VerticalAlignment="Center"/>
                 </StackPanel>
 
@@ -114,9 +114,9 @@ Add-Type -AssemblyName System.Windows.Forms
                     <StackPanel>
                         <Label Content="ACTIONS" Foreground="#888888" FontSize="10" FontWeight="Bold" Margin="0,0,0,5"/>
                         
-                        <Button Name="BtnSelectFolder" Content="📂 Select Folder" Height="35" HorizontalContentAlignment="Left"/>
-                        <Button Name="BtnScan" Content="🔍 Scan Subfolders" Height="35" HorizontalContentAlignment="Left" Margin="5,0,5,5"/>
-                        <Button Name="BtnSyncAll" Content="⚡ Sync All" Height="35" HorizontalContentAlignment="Left" Background="#007ACC"/>
+                        <Button Name="BtnSelectFolder" Content="Select Folder" Height="35" HorizontalContentAlignment="Left"/>
+                        <Button Name="BtnScan" Content="Scan Subfolders" Height="35" HorizontalContentAlignment="Left" Margin="5,0,5,5"/>
+                        <Button Name="BtnSyncAll" Content="Sync All" Height="35" HorizontalContentAlignment="Left" Background="#007ACC"/>
 
                         <Separator Background="#333333" Margin="0,15"/>
 
@@ -209,7 +209,31 @@ Add-Type -AssemblyName System.Windows.Forms
             <!-- 3. Footer / Status Bar -->
             <Border Grid.Row="2" Background="#007ACC" CornerRadius="0,0,8,8">
                 <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
                     <TextBlock Name="StatusText" Text="Ready" Foreground="White" VerticalAlignment="Center" Margin="15,0"/>
+                    <Button Name="BtnToggleLog" Grid.Column="1" Content="Show Log" Background="Transparent" Foreground="White" Margin="0,0,10,0" FontWeight="Bold"/>
+                </Grid>
+            </Border>
+
+            <!-- 4. Log Overlay (Hidden by Default) -->
+            <Border Name="LogOverlay" Grid.Row="0" Grid.RowSpan="2" Background="#F21E1E1E" Margin="10,40,10,0" Visibility="Collapsed" BorderBrush="#333333" BorderThickness="1" CornerRadius="4">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Border Background="#2D2D30" Padding="10,5" CornerRadius="4,4,0,0">
+                        <Grid>
+                            <TextBlock Text="Real-Time Log" Foreground="White" FontWeight="Bold"/>
+                            <Button Name="BtnCloseLog" Content="✕" HorizontalAlignment="Right" Background="Transparent" Foreground="#FF5252" Width="30" Padding="0"/>
+                        </Grid>
+                    </Border>
+                    <ScrollViewer Name="LogScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Background="#1E1E1E">
+                        <TextBox Name="LogTextBox" Background="Transparent" Foreground="#00FF00" FontFamily="Consolas" BorderThickness="0" IsReadOnly="True" TextWrapping="Wrap" Padding="5"/>
+                    </ScrollViewer>
                 </Grid>
             </Border>
         </Grid>
@@ -235,7 +259,8 @@ catch {
 $controls = @(
     "TitleBarArea", "MinimizeButton", "CloseButton", 
     "BtnSelectFolder", "BtnScan", "BtnSyncAll", 
-    "TxtCountFound", "TxtCountSuccess", "TxtCurrentPath", "RepoList", "StatusText"
+    "TxtCountFound", "TxtCountSuccess", "TxtCurrentPath", "RepoList", "StatusText",
+    "BtnToggleLog", "LogOverlay", "BtnCloseLog", "LogTextBox", "LogScroll"
 )
 foreach ($id in $controls) {
     Set-Variable -Name $id -Value $window.FindName($id) -Scope Script
@@ -334,13 +359,34 @@ Function Sync-Repositories {
     # Prepare Data for Background Thread (ObservableCollection is not safe to pass directly)
     $repoPaths = $Script:Repos | Select-Object -ExpandProperty Path
     
-    # Clear Queue
+    # SETUP LOGGING
+    $parentName = Split-Path $Script:SelectedFolder -Leaf
+    $dateStamp = Get-Date -Format "yyyy-MM-dd"
+    $logFile = Join-Path $Script:SelectedFolder "$dateStamp-$parentName.log"
+    
+    # Clear Queue & Log Box
     $Script:SyncQueue.Clear()
+    $LogTextBox.Text = "--- Log Started: $(Get-Date) ---`r`n"
+    if ($LogOverlay.Visibility -eq "Collapsed") { $LogOverlay.Visibility = "Visible" }
 
     # 1. Create ScriptBlock for Background Worker
     $syncBlock = {
-        param($paths, $queue)
+        param($paths, $queue, $logFile)
         
+        # Helper logging function
+        function Log-Msg ($msg) {
+            # To File
+            $time = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+            "[$time] $msg" | Out-File $logFile -Append -Encoding UTF8
+            # To UI
+            $queue.Enqueue(@{ Type = "Log"; Msg = "[$time] $msg" })
+        }
+
+        # Header
+        Log-Msg "======================================================"
+        Log-Msg "STARTING SYNC JOB"
+        Log-Msg "======================================================"
+
         $total = $paths.Count
         $i = 0
 
@@ -349,6 +395,7 @@ Function Sync-Repositories {
             
             # Notify Start
             $queue.Enqueue(@{ Type = "Progress"; Path = $path; Index = $i; Total = $total })
+            Log-Msg "PROCESSING: $path"
             
             # Do Work
             $status = "Failed"
@@ -359,34 +406,47 @@ Function Sync-Repositories {
                     Push-Location $path
                     $env:GIT_REDIRECT_STDERR_TO_STDOUT = "1"
                     
-                    # Run Git
-                    git fetch --all 2>&1 | Out-Null
-                    git pull 2>&1 | Out-Null
+                    Log-Msg "   [CMD] git fetch --all"
+                    $fetch = git fetch --all 2>&1 
+                    if ($fetch) { foreach ($l in $fetch) { Log-Msg "      $l" } }
+
+                    Log-Msg "   [CMD] git pull"
+                    $pull = git pull 2>&1
+                    if ($pull) { foreach ($l in $pull) { Log-Msg "      $l" } }
                     
                     if ($LASTEXITCODE -eq 0) {
                         $status = "Synced"
                         $color = "#4CAF50" # Green
+                        Log-Msg "   [RES] SUCCESS"
                     }
                     else {
                         $status = "Error"
                         $color = "#FF5252" # Red
+                        Log-Msg "   [RES] GIT EXIT CODE $LASTEXITCODE"
                     }
                 }
                 catch {
                     $status = "Ex: $_"
+                    Log-Msg "   [ERR] EXCEPTION: $_"
                 }
                 finally {
                     Pop-Location
                 }
             }
+            else {
+                Log-Msg "   [ERR] PATH NOT FOUND"
+            }
             
             # Notify Result
             $queue.Enqueue(@{ Type = "Result"; Path = $path; Status = $status; Color = $color })
         }
+        Log-Msg "======================================================"
+        Log-Msg "SYNC JOB COMPLETED"
+        Log-Msg "======================================================"
     }
 
     # 2. Start Runspace
-    $Script:SyncRunspace = [PowerShell]::Create().AddScript($syncBlock).AddArgument($repoPaths).AddArgument($Script:SyncQueue)
+    $Script:SyncRunspace = [PowerShell]::Create().AddScript($syncBlock).AddArgument($repoPaths).AddArgument($Script:SyncQueue).AddArgument($logFile)
     $Script:SyncRunspace.BeginInvoke()
 
     # 3. Start UI Timer to poll results
@@ -416,7 +476,12 @@ Function Process-SyncQueue {
             Update-Status "Syncing [$($msg.Index)/$($msg.Total)]: $($msg.Path | Split-Path -Leaf)"
             $RepoList.Items.Refresh()
         }
+        elseif ($msg.Type -eq "Log") {
+            $LogTextBox.AppendText($msg.Msg + "`r`n")
+            $LogScroll.ScrollToEnd()
+        }
         elseif ($msg.Type -eq "Result") {
+
             if ($repo) {
                 $repo.Status = $msg.Status
                 $repo.StatusColor = $msg.Color
@@ -464,6 +529,22 @@ $BtnScan.Add_Click({
 
 $BtnSyncAll.Add_Click({
         Sync-Repositories
+    })
+
+$BtnToggleLog.Add_Click({
+        if ($LogOverlay.Visibility -eq "Visible") {
+            $LogOverlay.Visibility = "Collapsed"
+            $BtnToggleLog.Content = "Show Log"
+        }
+        else {
+            $LogOverlay.Visibility = "Visible"
+            $BtnToggleLog.Content = "Hide Log"
+        }
+    })
+
+$BtnCloseLog.Add_Click({
+        $LogOverlay.Visibility = "Collapsed"
+        $BtnToggleLog.Content = "Show Log"
     })
 
 # --------------------------------------------------
