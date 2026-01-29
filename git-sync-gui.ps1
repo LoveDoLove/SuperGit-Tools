@@ -225,7 +225,8 @@ Add-Type -AssemblyName System.Windows.Forms
 $reader = (New-Object System.Xml.XmlNodeReader $xaml)
 try {
     $window = [Windows.Markup.XamlReader]::Load($reader)
-} catch {
+}
+catch {
     Write-Error "Failed to load XAML: $_"
     exit
 }
@@ -244,17 +245,17 @@ foreach ($id in $controls) {
 # Window Events (Chrome-less dragging)
 # --------------------------------------------------
 $TitleBarArea.Add_MouseLeftButtonDown({
-    param($sender, $e)
-    $window.DragMove()
-})
+        param($sender, $e)
+        $window.DragMove()
+    })
 
 $MinimizeButton.Add_Click({
-    $window.WindowState = "Minimized"
-})
+        $window.WindowState = "Minimized"
+    })
 
 $CloseButton.Add_Click({
-    $window.Close()
-})
+        $window.Close()
+    })
 
 # --------------------------------------------------
 # Application State
@@ -307,78 +308,163 @@ Function Scan-Repositories {
     Update-Status "Scan Complete. Found $($Script:Repos.Count) repositories."
 }
 
+# --------------------------------------------------
+# Async Sync Logic
+# --------------------------------------------------
+$Script:SyncTimer = $null
+$Script:SyncRunspace = $null
+$Script:SyncQueue = [System.Collections.Queue]::Synchronized([System.Collections.Queue]::new())
+
 Function Sync-Repositories {
     $count = $Script:Repos.Count
     if ($count -eq 0) { return }
 
+    # Disable UI
     $BtnSyncAll.IsEnabled = $false
-    $success = 0
-    $i = 0
+    $BtnScan.IsEnabled = $false
+    Update-Status "Starting background sync..."
 
-    foreach ($repo in $Script:Repos) {
-        $i++
-        # Update User Interface for processing
-        $repo.Status = "Syncing..."
-        $repo.StatusColor = "#007ACC" # Blue
-        # Refreshes the list view specific item - tricky in PS WPF without INotifyPropertyChanged
-        # We simulate refresh by re-binding (costly) or just relying on PS behavior. 
-        # A true MVVM is hard in single script, so we force list refresh:
-        $RepoList.Items.Refresh() 
+    # Reset Stats
+    $Script:Repos | ForEach-Object { 
+        $_.Status = "Pending..." 
+        $_.StatusColor = "#444444" 
+    }
+    $RepoList.Items.Refresh()
+
+    # Prepare Data for Background Thread (ObservableCollection is not safe to pass directly)
+    $repoPaths = $Script:Repos | Select-Object -ExpandProperty Path
+    
+    # Clear Queue
+    $Script:SyncQueue.Clear()
+
+    # 1. Create ScriptBlock for Background Worker
+    $syncBlock = {
+        param($paths, $queue)
         
-        Update-Status "Syncing [$i/$count]: $($repo.Name)"
-        
-        # Git Operation
-        Push-Location $repo.Path
-        try {
-            $env:GIT_REDIRECT_STDERR_TO_STDOUT = "1"
+        $total = $paths.Count
+        $i = 0
+
+        foreach ($path in $paths) {
+            $i++
             
-            # Shallow check or real pull? Requirements said "Sync"
-            $res = git fetch --all 2>&1
-            $res2 = git pull 2>&1
+            # Notify Start
+            $queue.Enqueue(@{ Type = "Progress"; Path = $path; Index = $i; Total = $total })
             
-            if ($LASTEXITCODE -eq 0) {
-                $repo.Status = "Synced"
-                $repo.StatusColor = "#4CAF50" # Green
-                $success++
-            } else {
-                $repo.Status = "Error"
-                $repo.StatusColor = "#FF5252" # Red
+            # Do Work
+            $status = "Failed"
+            $color = "#FF5252"
+            
+            if (Test-Path $path) {
+                try {
+                    Push-Location $path
+                    $env:GIT_REDIRECT_STDERR_TO_STDOUT = "1"
+                    
+                    # Run Git
+                    git fetch --all 2>&1 | Out-Null
+                    git pull 2>&1 | Out-Null
+                    
+                    if ($LASTEXITCODE -eq 0) {
+                        $status = "Synced"
+                        $color = "#4CAF50" # Green
+                    }
+                    else {
+                        $status = "Error"
+                        $color = "#FF5252" # Red
+                    }
+                }
+                catch {
+                    $status = "Ex: $_"
+                }
+                finally {
+                    Pop-Location
+                }
             }
-        } catch {
-            $repo.Status = "Failed"
-            $repo.StatusColor = "#FF5252"
-        } finally {
-            Pop-Location
+            
+            # Notify Result
+            $queue.Enqueue(@{ Type = "Result"; Path = $path; Status = $status; Color = $color })
         }
-        $TxtCountSuccess.Text = $success.ToString()
-        $RepoList.Items.Refresh()
     }
 
-    $BtnSyncAll.IsEnabled = $true
-    Update-Status "Sync Complete. $success/$count successful."
+    # 2. Start Runspace
+    $Script:SyncRunspace = [PowerShell]::Create().AddScript($syncBlock).AddArgument($repoPaths).AddArgument($Script:SyncQueue)
+    $Script:SyncRunspace.BeginInvoke()
+
+    # 3. Start UI Timer to poll results
+    if ($null -eq $Script:SyncTimer) {
+        $Script:SyncTimer = New-Object System.Windows.Threading.DispatcherTimer
+        $Script:SyncTimer.Interval = [TimeSpan]::FromMilliseconds(100)
+        $Script:SyncTimer.Add_Tick({
+                Process-SyncQueue
+            })
+    }
+    $Script:SyncTimer.Start()
+}
+
+Function Process-SyncQueue {
+    # Process all available messages
+    while ($Script:SyncQueue.Count -gt 0) {
+        $msg = $Script:SyncQueue.Dequeue()
+        
+        # Find local repo object
+        $repo = $Script:Repos | Where-Object { $_.Path -eq $msg.Path } | Select-Object -First 1
+        
+        if ($msg.Type -eq "Progress") {
+            if ($repo) {
+                $repo.Status = "Syncing..."
+                $repo.StatusColor = "#007ACC"
+            }
+            Update-Status "Syncing [$($msg.Index)/$($msg.Total)]: $($msg.Path | Split-Path -Leaf)"
+            $RepoList.Items.Refresh()
+        }
+        elseif ($msg.Type -eq "Result") {
+            if ($repo) {
+                $repo.Status = $msg.Status
+                $repo.StatusColor = $msg.Color
+                
+                # Update Success Count safely
+                if ($msg.Status -eq "Synced") {
+                    $curr = [int]$TxtCountSuccess.Text
+                    $TxtCountSuccess.Text = ($curr + 1).ToString()
+                }
+            }
+            $RepoList.Items.Refresh()
+        }
+    }
+
+    # Check if finished
+    if ($Script:SyncRunspace -and $Script:SyncRunspace.InvocationStateInfo.State -ne "Running") {
+        $Script:SyncTimer.Stop()
+        $Script:SyncRunspace.Dispose()
+        $Script:SyncRunspace = $null
+        
+        $BtnSyncAll.IsEnabled = $true
+        $BtnScan.IsEnabled = $true
+        Update-Status "Sync Completed!"
+        $RepoList.Items.Refresh()
+    }
 }
 
 # --------------------------------------------------
 # Event Handlers
 # --------------------------------------------------
 $BtnSelectFolder.Add_Click({
-    $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-    $dialog.Description = "Select Parent Folder containing Git Repos"
+        $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+        $dialog.Description = "Select Parent Folder containing Git Repos"
     
-    if ($dialog.ShowDialog() -eq "OK") {
-        $Script:SelectedFolder = $dialog.SelectedPath
-        $TxtCurrentPath.Text = $Script:SelectedFolder
-        Update-Status "Folder Selected: $($Script:SelectedFolder)"
-    }
-})
+        if ($dialog.ShowDialog() -eq "OK") {
+            $Script:SelectedFolder = $dialog.SelectedPath
+            $TxtCurrentPath.Text = $Script:SelectedFolder
+            Update-Status "Folder Selected: $($Script:SelectedFolder)"
+        }
+    })
 
 $BtnScan.Add_Click({
-    Scan-Repositories
-})
+        Scan-Repositories
+    })
 
 $BtnSyncAll.Add_Click({
-    Sync-Repositories
-})
+        Sync-Repositories
+    })
 
 # --------------------------------------------------
 # Launch
