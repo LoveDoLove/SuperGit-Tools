@@ -44,22 +44,22 @@ catch {
         Background="Transparent">
 
     <Window.Resources>
-        <!-- Colors & Brushes -->
+        <!-- Colors & Brushes (Light Theme) -->
         <LinearGradientBrush x:Key="WindowBackground" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#121212" Offset="0.0"/>
-            <GradientStop Color="#1C1C1C" Offset="1.0"/>
+            <GradientStop Color="#FFFFFF" Offset="0.0"/>
+            <GradientStop Color="#F5F5F5" Offset="1.0"/>
         </LinearGradientBrush>
         
-        <SolidColorBrush x:Key="SidebarBackground" Color="#161616"/>
-        <SolidColorBrush x:Key="ControlBackground" Color="#2A2A2E"/>
-        <SolidColorBrush x:Key="CardBackground" Color="#1E1E1E"/>
-        <SolidColorBrush x:Key="TextPrimary" Color="#FFFFFF"/>
-        <SolidColorBrush x:Key="TextSecondary" Color="#B0B0B0"/>
-        <SolidColorBrush x:Key="TextMuted" Color="#707070"/>
+        <SolidColorBrush x:Key="SidebarBackground" Color="#F0F0F0"/>
+        <SolidColorBrush x:Key="ControlBackground" Color="#E8E8E8"/>
+        <SolidColorBrush x:Key="CardBackground" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#1A1A1A"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#616161"/>
+        <SolidColorBrush x:Key="TextMuted" Color="#9E9E9E"/>
         
         <!-- Action Button Gradient -->
         <LinearGradientBrush x:Key="AccentGradient" StartPoint="0,0" EndPoint="1,0">
-            <GradientStop Color="#007ACC" Offset="0.0"/>
+            <GradientStop Color="#0078D4" Offset="0.0"/>
             <GradientStop Color="#005A9E" Offset="1.0"/>
         </LinearGradientBrush>
 
@@ -80,10 +80,10 @@ catch {
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#3E3E42"/>
+                                <Setter TargetName="border" Property="Background" Value="#D0D0D0"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#007ACC"/>
+                                <Setter TargetName="border" Property="Background" Value="#0078D4"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.5"/>
@@ -99,7 +99,7 @@ catch {
             <Setter Property="Background" Value="{StaticResource ControlBackground}"/>
             <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="#3E3E42"/>
+            <Setter Property="BorderBrush" Value="#CCCCCC"/>
             <Setter Property="Padding" Value="8,6"/>
             <Setter Property="FontSize" Value="12"/>
         </Style>
@@ -107,12 +107,12 @@ catch {
         <!-- ScrollBar Style -->
         <Style TargetType="ScrollBar">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#444444"/>
+            <Setter Property="Foreground" Value="#BDBDBD"/>
         </Style>
 
     </Window.Resources>
 
-    <Border Background="{StaticResource WindowBackground}" CornerRadius="8" BorderThickness="1" BorderBrush="#2A2A2E">
+    <Border Background="{StaticResource WindowBackground}" CornerRadius="8" BorderThickness="1" BorderBrush="#D0D0D0">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="40"/>
@@ -133,7 +133,7 @@ catch {
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,10,0">
-                    <Button Name="MinimizeButton" Content="_" Width="40" Background="Transparent" Foreground="#CCCCCC"/>
+                    <Button Name="MinimizeButton" Content="_" Width="40" Background="Transparent" Foreground="#666666"/>
                     <Button Name="CloseButton" Content="X" Width="40" Background="Transparent" Foreground="#FF5252" FontWeight="Bold"/>
                 </StackPanel>
             </Grid>
@@ -149,20 +149,20 @@ catch {
                 <Border Grid.Column="0" Background="{StaticResource SidebarBackground}" Padding="15">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
-                            <Label Content="ACTIONS" Foreground="#666666" FontSize="10" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <Label Content="ACTIONS" Foreground="#9E9E9E" FontSize="10" FontWeight="Bold" Margin="0,0,0,5"/>
                             
                             <Button Name="BtnSelectFolder" Content="Select Folder" Height="35" HorizontalContentAlignment="Left"/>
                             <Button Name="BtnScan" Content="Scan Repositories" Height="35" HorizontalContentAlignment="Left" Margin="5,0,5,5"/>
                             <Button Name="BtnRefresh" Content="Refresh Status" Height="35" HorizontalContentAlignment="Left" Margin="5,0,5,5"/>
                             <Button Name="BtnSyncAll" Content="Sync All" Height="35" HorizontalContentAlignment="Left" Background="{StaticResource AccentGradient}"/>
 
-                            <Separator Background="#2A2A2E" Margin="0,15"/>
+                            <Separator Background="#D0D0D0" Margin="0,15"/>
 
-                            <Label Content="FILTER" Foreground="#666666" FontSize="10" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <Label Content="FILTER" Foreground="#9E9E9E" FontSize="10" FontWeight="Bold" Margin="0,0,0,5"/>
                             <TextBox Name="TxtSearch" Height="32" Margin="5"/>
-                            <TextBlock Name="TxtSearchHelper" Text="Search repos..." Foreground="#666666" FontSize="11" Margin="10,2,0,0" FontStyle="Italic"/>
+                            <TextBlock Name="TxtSearchHelper" Text="Search repos..." Foreground="#9E9E9E" FontSize="11" Margin="10,2,0,0" FontStyle="Italic"/>
                             
-                            <ComboBox Name="CmbStatusFilter" Height="32" Margin="5,10,5,5" Background="{StaticResource ControlBackground}" Foreground="{StaticResource TextPrimary}" BorderBrush="#3E3E42">
+                            <ComboBox Name="CmbStatusFilter" Height="32" Margin="5,10,5,5" Background="{StaticResource ControlBackground}" Foreground="{StaticResource TextPrimary}" BorderBrush="#CCCCCC">
                                 <ComboBoxItem Content="All Status" IsSelected="True"/>
                                 <ComboBoxItem Content="Clean"/>
                                 <ComboBoxItem Content="Dirty"/>
@@ -172,12 +172,12 @@ catch {
                                 <ComboBoxItem Content="Error"/>
                             </ComboBox>
 
-                            <Separator Background="#2A2A2E" Margin="0,15"/>
+                            <Separator Background="#D0D0D0" Margin="0,15"/>
 
-                            <Label Content="STATS" Foreground="#666666" FontSize="10" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <Label Content="STATS" Foreground="#9E9E9E" FontSize="10" FontWeight="Bold" Margin="0,0,0,5"/>
                             <StackPanel Orientation="Horizontal" Margin="5">
                                 <TextBlock Text="Found:" Foreground="{StaticResource TextSecondary}" Width="65"/>
-                                <TextBlock Name="TxtCountFound" Text="0" Foreground="White" FontWeight="Bold"/>
+                                <TextBlock Name="TxtCountFound" Text="0" Foreground="{StaticResource TextPrimary}" FontWeight="Bold"/>
                             </StackPanel>
                             <StackPanel Orientation="Horizontal" Margin="5">
                                 <TextBlock Text="Success:" Foreground="{StaticResource TextSecondary}" Width="65"/>
@@ -192,9 +192,9 @@ catch {
                                 <TextBlock Name="TxtCountDirty" Text="0" Foreground="#FFC107" FontWeight="Bold"/>
                             </StackPanel>
 
-                            <Separator Background="#2A2A2E" Margin="0,15"/>
+                            <Separator Background="#D0D0D0" Margin="0,15"/>
 
-                            <Label Content="OPTIONS" Foreground="#666666" FontSize="10" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <Label Content="OPTIONS" Foreground="#9E9E9E" FontSize="10" FontWeight="Bold" Margin="0,0,0,5"/>
                             <Button Name="BtnExportLogs" Content="Export Logs" Height="32" HorizontalContentAlignment="Left"/>
                             <Button Name="BtnSettings" Content="Settings" Height="32" HorizontalContentAlignment="Left" Margin="5,0,5,5"/>
                         </StackPanel>
@@ -210,11 +210,11 @@ catch {
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel>
-                                <TextBlock Text="Repositories" FontSize="20" FontWeight="Light" Foreground="White"/>
-                                <TextBlock Name="TxtCurrentPath" Text="No folder selected" Foreground="#666666" FontStyle="Italic" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="Repositories" FontSize="20" FontWeight="Light" Foreground="{StaticResource TextPrimary}"/>
+                                <TextBlock Name="TxtCurrentPath" Text="No folder selected" Foreground="{StaticResource TextMuted}" FontStyle="Italic" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                <ComboBox Name="CmbSortBy" Width="140" Height="28" Margin="10,0" Background="{StaticResource ControlBackground}" Foreground="{StaticResource TextPrimary}" BorderBrush="#3E3E42">
+                                <ComboBox Name="CmbSortBy" Width="140" Height="28" Margin="10,0" Background="{StaticResource ControlBackground}" Foreground="{StaticResource TextPrimary}" BorderBrush="#CCCCCC">
                                     <ComboBoxItem Content="Sort: Name" IsSelected="True"/>
                                     <ComboBoxItem Content="Sort: Status"/>
                                     <ComboBoxItem Content="Sort: Branch"/>
@@ -243,7 +243,7 @@ catch {
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Border Background="{StaticResource CardBackground}" CornerRadius="6" Padding="12" 
-                                        BorderBrush="#2A2A2E" BorderThickness="1" Name="CardBorder">
+                                        BorderBrush="#E0E0E0" BorderThickness="1" Name="CardBorder">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -253,24 +253,24 @@ catch {
                                         <!-- Left Info -->
                                         <StackPanel VerticalAlignment="Center">
                                             <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding Name}" Foreground="White" FontWeight="SemiBold" FontSize="14"/>
-                                                <TextBlock Text="{Binding Branch}" Foreground="#2196F3" FontSize="11" Margin="10,0,0,0" VerticalAlignment="Center" FontStyle="Italic"/>
+                                                <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="14"/>
+                                                <TextBlock Text="{Binding Branch}" Foreground="#1976D2" FontSize="11" Margin="10,0,0,0" VerticalAlignment="Center" FontStyle="Italic"/>
                                             </StackPanel>
-                                            <TextBlock Text="{Binding Path}" Foreground="#707070" FontSize="10" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
-                                            <TextBlock Text="{Binding DetailedStatus}" Foreground="#888888" FontSize="10" Margin="0,2,0,0"/>
+                                            <TextBlock Text="{Binding Path}" Foreground="{StaticResource TextMuted}" FontSize="10" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                                            <TextBlock Text="{Binding DetailedStatus}" Foreground="{StaticResource TextSecondary}" FontSize="10" Margin="0,2,0,0"/>
                                         </StackPanel>
 
                                         <!-- Right Status -->
                                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Status}" Foreground="#AAAAAA" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                            <TextBlock Text="{Binding Status}" Foreground="{StaticResource TextSecondary}" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                             <Ellipse Width="14" Height="14" Fill="{Binding StatusColor}"/>
                                         </StackPanel>
                                     </Grid>
                                 </Border>
                                 <DataTemplate.Triggers>
                                     <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
-                                        <Setter TargetName="CardBorder" Property="Background" Value="#252525"/>
-                                        <Setter TargetName="CardBorder" Property="BorderBrush" Value="#3E3E42"/>
+                                        <Setter TargetName="CardBorder" Property="Background" Value="#F8F8F8"/>
+                                        <Setter TargetName="CardBorder" Property="BorderBrush" Value="#BDBDBD"/>
                                     </DataTrigger>
                                 </DataTemplate.Triggers>
                             </DataTemplate>
@@ -280,7 +280,7 @@ catch {
             </Grid>
 
             <!-- 3. Footer / Status Bar -->
-            <Border Grid.Row="2" Background="#007ACC" CornerRadius="0,0,8,8">
+            <Border Grid.Row="2" Background="#0078D4" CornerRadius="0,0,8,8">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -291,30 +291,30 @@ catch {
                     <TextBlock Name="StatusText" Text="Ready" Foreground="White" VerticalAlignment="Center" Margin="15,0" FontWeight="SemiBold" FontSize="11"/>
                     
                     <!-- Progress Bar -->
-                    <ProgressBar Name="SyncProgressBar" Grid.Column="1" Height="6" Margin="10,0" Background="#33000000" Foreground="White" BorderThickness="0" Value="0" Maximum="100"/>
+                    <ProgressBar Name="SyncProgressBar" Grid.Column="1" Height="6" Margin="10,0" Background="#33FFFFFF" Foreground="White" BorderThickness="0" Value="0" Maximum="100"/>
                     
                     <Button Name="BtnToggleLog" Grid.Column="2" Content="Show Log" Background="Transparent" Foreground="White" Margin="0,0,10,0" FontWeight="Bold"/>
                 </Grid>
             </Border>
 
             <!-- 4. Log Overlay -->
-            <Border Name="LogOverlay" Grid.Row="0" Grid.RowSpan="2" Background="#F2121212" Margin="20,50,20,10" Visibility="Collapsed" BorderBrush="#2A2A2E" BorderThickness="1" CornerRadius="6">
+            <Border Name="LogOverlay" Grid.Row="0" Grid.RowSpan="2" Background="#F2FFFFFF" Margin="20,50,20,10" Visibility="Collapsed" BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="6">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <Border Background="#1E1E1E" Padding="12,8" CornerRadius="6,6,0,0">
+                    <Border Background="#F0F0F0" Padding="12,8" CornerRadius="6,6,0,0">
                         <Grid>
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Activity Log" Foreground="White" FontWeight="Bold"/>
+                                <TextBlock Text="Activity Log" Foreground="{StaticResource TextPrimary}" FontWeight="Bold"/>
                                 <Button Name="BtnClearLog" Content="Clear" Margin="15,0,0,0" Height="24" Padding="10,2" Background="{StaticResource ControlBackground}"/>
                             </StackPanel>
                             <Button Name="BtnCloseLog" Content="X" HorizontalAlignment="Right" Background="Transparent" Foreground="#FF5252" Width="30" Padding="0"/>
                         </Grid>
                     </Border>
-                    <ScrollViewer Name="LogScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Background="#0D0D0D">
-                        <TextBox Name="LogTextBox" Background="Transparent" Foreground="#00FF00" FontFamily="Consolas" BorderThickness="0" IsReadOnly="True" TextWrapping="Wrap" Padding="10" FontSize="11"/>
+                    <ScrollViewer Name="LogScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Background="#FAFAFA">
+                        <TextBox Name="LogTextBox" Background="Transparent" Foreground="#2E7D32" FontFamily="Consolas" BorderThickness="0" IsReadOnly="True" TextWrapping="Wrap" Padding="10" FontSize="11"/>
                     </ScrollViewer>
                 </Grid>
             </Border>
