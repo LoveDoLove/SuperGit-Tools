@@ -1023,6 +1023,9 @@ Function Process-ScanQueue {
             $Script:FilteredRepos.Add($repoObj)
             $TxtCountFound.Text = $Script:AllRepos.Count.ToString()
             
+            # Log discovery
+            Log-Message "Found: $($item.Name) ($($item.Path))"
+            
             # SUBMIT JOB IMMEDIATELY
             Submit-StatusJob $repoObj.Path
         }
@@ -1195,6 +1198,9 @@ Function Process-StatusQueue {
             $repo.IsDirty = $res.IsDirty
             $repo.Ahead = $res.Ahead
             $repo.Behind = $res.Behind
+            
+            # Log status result
+            Log-Message "Status: $($repo.Name) [$($res.Branch)] - $($res.Status) ($($res.DetailedStatus))"
         }
     }
     
@@ -1216,6 +1222,7 @@ Function Process-StatusQueue {
         $Script:StatusTimer.Stop()
         $Script:StatusPool.Clear() # Dispose handles if needed
         Update-Status "Status Check Complete"
+        Log-Message "Status refresh complete"
     }
 }
 
