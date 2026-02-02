@@ -1,71 +1,103 @@
 <#
 .SYNOPSIS
-    SuperGit-Tools GUI - "Friendly Horizon" Edition v2.0
+    SuperGit-Tools GUI - "Friendly Horizon" Edition v3.0
     A modern, feature-rich GUI for syncing Git repositories.
 
 .DESCRIPTION
-    This script launches a WPF application to manage and sync multiple git repositories.
-    Enhanced with advanced status tracking, filtering, individual repo actions, and more.
-    
-    Features:
-    - Git status detection (clean, dirty, ahead, behind, diverged)
-    - Search and filter repositories
-    - Individual repository actions (context menu)
-    - Enhanced visual design with animations
-    - Keyboard shortcuts
-    - Detailed repository information
-    - Export logs functionality
+    Complete rewrite with enhanced async architecture, settings persistence,
+    and improved "Friendly Horizon" light theme design.
 
 .NOTES
     Author: Antigravity for SuperGit-Tools
     Requires: PowerShell 5.1+, Git installed
 #>
 
+#region Configuration
+# =============================================================================
+$Script:AppVersion = "3.0"
+$Script:AppName = "SuperGit Tools"
+
+# Settings path
+$Script:SettingsDir = Join-Path $env:APPDATA "SuperGit-Tools"
+$Script:SettingsFile = Join-Path $Script:SettingsDir "settings.json"
+
+# Default settings
+$Script:DefaultSettings = @{
+    MaxParallel        = 8
+    LogRetentionDays   = 30
+    RecentFoldersCount = 5
+    RecentFolders      = @()
+}
+
+# Color Palette - Friendly Horizon Light Theme
+$Script:Colors = @{
+    WindowBg1       = "#FFFFFF"
+    WindowBg2       = "#F5F5F5"
+    Sidebar         = "#F0F0F0"
+    Control         = "#E8E8E8"
+    Card            = "#FFFFFF"
+    CardBorder      = "#E0E0E0"
+    CardHover       = "#F8F8F8"
+    CardHoverBorder = "#BDBDBD"
+    TextPrimary     = "#1A1A1A"
+    TextSecondary   = "#616161"
+    TextMuted       = "#9E9E9E"
+    Accent          = "#0078D4"
+    AccentDark      = "#005A9E"
+    StatusClean     = "#4CAF50"
+    StatusDirty     = "#FFC107"
+    StatusAhead     = "#2196F3"
+    StatusBehind    = "#FF9800"
+    StatusDiverged  = "#9C27B0"
+    StatusError     = "#FF5252"
+    StatusSyncing   = "#00BCD4"
+    StatusPending   = "#757575"
+}
+#endregion
+
+#region Assemblies
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName System.Windows.Forms
 
-# Check if Git is installed
-try {
-    $null = git --version
-}
+# Check Git
+try { $null = git --version }
 catch {
-    [System.Windows.MessageBox]::Show("Git is not installed or not in PATH. Please install Git and try again.", "Git Not Found", "OK", "Error")
+    [System.Windows.MessageBox]::Show("Git is not installed or not in PATH.", "Git Not Found", "OK", "Error")
     exit
 }
+#endregion
 
-# -----------------------------------------------------------------------------
-# XAML INTERFACE (Enhanced Friendly Horizon Design)
-# -----------------------------------------------------------------------------
+#region XAML_UI
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="SuperGit Tools v2.0" Height="700" Width="1100"
+        Title="SuperGit Tools v3.0" Height="700" Width="1100"
         WindowStyle="None" ResizeMode="CanResizeWithGrip" AllowsTransparency="True"
         Background="Transparent">
 
     <Window.Resources>
-        <!-- Colors & Brushes (Light Theme) -->
+        <!-- Brushes -->
         <LinearGradientBrush x:Key="WindowBackground" StartPoint="0,0" EndPoint="1,1">
             <GradientStop Color="#FFFFFF" Offset="0.0"/>
             <GradientStop Color="#F5F5F5" Offset="1.0"/>
         </LinearGradientBrush>
         
-        <SolidColorBrush x:Key="SidebarBackground" Color="#F0F0F0"/>
-        <SolidColorBrush x:Key="ControlBackground" Color="#E8E8E8"/>
-        <SolidColorBrush x:Key="CardBackground" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="SidebarBg" Color="#F0F0F0"/>
+        <SolidColorBrush x:Key="ControlBg" Color="#E8E8E8"/>
+        <SolidColorBrush x:Key="CardBg" Color="#FFFFFF"/>
         <SolidColorBrush x:Key="TextPrimary" Color="#1A1A1A"/>
         <SolidColorBrush x:Key="TextSecondary" Color="#616161"/>
         <SolidColorBrush x:Key="TextMuted" Color="#9E9E9E"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#0078D4"/>
         
-        <!-- Action Button Gradient -->
         <LinearGradientBrush x:Key="AccentGradient" StartPoint="0,0" EndPoint="1,0">
             <GradientStop Color="#0078D4" Offset="0.0"/>
             <GradientStop Color="#005A9E" Offset="1.0"/>
         </LinearGradientBrush>
 
-        <!-- Button Style with Hover Animation -->
+        <!-- Button Style -->
         <Style TargetType="Button">
-            <Setter Property="Background" Value="{StaticResource ControlBackground}"/>
+            <Setter Property="Background" Value="{StaticResource ControlBg}"/>
             <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding" Value="12,6"/>
@@ -84,6 +116,7 @@ catch {
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="border" Property="Background" Value="#0078D4"/>
+                                <Setter Property="Foreground" Value="White"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.5"/>
@@ -96,7 +129,7 @@ catch {
 
         <!-- TextBox Style -->
         <Style TargetType="TextBox">
-            <Setter Property="Background" Value="{StaticResource ControlBackground}"/>
+            <Setter Property="Background" Value="{StaticResource ControlBg}"/>
             <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="BorderBrush" Value="#CCCCCC"/>
@@ -104,12 +137,12 @@ catch {
             <Setter Property="FontSize" Value="12"/>
         </Style>
 
-        <!-- ScrollBar Style -->
-        <Style TargetType="ScrollBar">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#BDBDBD"/>
+        <!-- ComboBox Style -->
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="{StaticResource ControlBg}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+            <Setter Property="BorderBrush" Value="#CCCCCC"/>
         </Style>
-
     </Window.Resources>
 
     <Border Background="{StaticResource WindowBackground}" CornerRadius="8" BorderThickness="1" BorderBrush="#D0D0D0">
@@ -120,7 +153,7 @@ catch {
                 <RowDefinition Height="35"/>
             </Grid.RowDefinitions>
 
-            <!-- 1. Custom Title Bar -->
+            <!-- Title Bar -->
             <Grid Grid.Row="0" Background="Transparent" Name="TitleBarArea">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -128,8 +161,10 @@ catch {
                 </Grid.ColumnDefinitions>
                 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="15,0,0,0">
+                    <Ellipse Width="12" Height="12" Fill="#0078D4" Margin="0,0,8,0"/>
                     <TextBlock Text="SuperGit Tools" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="14"/>
-                    <TextBlock Text=" v2.0 | Friendly Horizon" Foreground="{StaticResource TextSecondary}" Margin="10,0,0,0" FontSize="11" VerticalAlignment="Center"/>
+                    <TextBlock Text=" v3.0" Foreground="{StaticResource TextMuted}" FontSize="11" VerticalAlignment="Center"/>
+                    <TextBlock Text=" | Friendly Horizon" Foreground="{StaticResource TextSecondary}" Margin="5,0,0,0" FontSize="11" VerticalAlignment="Center"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,10,0">
@@ -138,31 +173,50 @@ catch {
                 </StackPanel>
             </Grid>
 
-            <!-- 2. Main Content Area -->
+            <!-- Main Content -->
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="240"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Sidebar Controls -->
-                <Border Grid.Column="0" Background="{StaticResource SidebarBackground}" Padding="15">
+                <!-- Sidebar -->
+                <Border Grid.Column="0" Background="{StaticResource SidebarBg}" Padding="15">
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
                         <StackPanel>
+                            <!-- Actions -->
                             <Label Content="ACTIONS" Foreground="#9E9E9E" FontSize="10" FontWeight="Bold" Margin="0,0,0,5"/>
-                            
                             <Button Name="BtnSelectFolder" Content="Select Folder" Height="35" HorizontalContentAlignment="Left"/>
                             <Button Name="BtnScan" Content="Scan Repositories" Height="35" HorizontalContentAlignment="Left" Margin="5,0,5,5"/>
                             <Button Name="BtnRefresh" Content="Refresh Status" Height="35" HorizontalContentAlignment="Left" Margin="5,0,5,5"/>
-                            <Button Name="BtnSyncAll" Content="Sync All" Height="35" HorizontalContentAlignment="Left" Background="{StaticResource AccentGradient}"/>
+                            <Button Name="BtnSyncAll" Content="Sync All" Height="35" HorizontalContentAlignment="Left" Background="{StaticResource AccentGradient}" Foreground="White"/>
 
                             <Separator Background="#D0D0D0" Margin="0,15"/>
 
+                            <!-- Recent Folders -->
+                            <Label Content="RECENT" Foreground="#9E9E9E" FontSize="10" FontWeight="Bold" Margin="0,0,0,5"/>
+                            <ListBox Name="RecentList" Background="Transparent" BorderThickness="0" MaxHeight="100" Margin="0,0,0,10">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Padding" Value="5,3"/>
+                                        <Setter Property="Cursor" Value="Hand"/>
+                                        <Setter Property="Foreground" Value="#616161"/>
+                                        <Setter Property="FontSize" Value="11"/>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                            </ListBox>
+
+                            <Separator Background="#D0D0D0" Margin="0,5"/>
+
+                            <!-- Filter -->
                             <Label Content="FILTER" Foreground="#9E9E9E" FontSize="10" FontWeight="Bold" Margin="0,0,0,5"/>
-                            <TextBox Name="TxtSearch" Height="32" Margin="5"/>
-                            <TextBlock Name="TxtSearchHelper" Text="Search repos..." Foreground="#9E9E9E" FontSize="11" Margin="10,2,0,0" FontStyle="Italic"/>
+                            <Grid Margin="5,0,5,0">
+                                <TextBox Name="TxtSearch" Height="32"/>
+                                <TextBlock Name="TxtSearchHelper" Text="Search repos..." Foreground="#9E9E9E" FontSize="11" Margin="10,0,0,0" 
+                                           FontStyle="Italic" VerticalAlignment="Center" IsHitTestVisible="False"/>
+                            </Grid>
                             
-                            <ComboBox Name="CmbStatusFilter" Height="32" Margin="5,10,5,5" Background="{StaticResource ControlBackground}" Foreground="{StaticResource TextPrimary}" BorderBrush="#CCCCCC">
+                            <ComboBox Name="CmbStatusFilter" Height="32" Margin="5,10,5,5">
                                 <ComboBoxItem Content="All Status" IsSelected="True"/>
                                 <ComboBoxItem Content="Clean"/>
                                 <ComboBoxItem Content="Dirty"/>
@@ -174,6 +228,7 @@ catch {
 
                             <Separator Background="#D0D0D0" Margin="0,15"/>
 
+                            <!-- Stats -->
                             <Label Content="STATS" Foreground="#9E9E9E" FontSize="10" FontWeight="Bold" Margin="0,0,0,5"/>
                             <StackPanel Orientation="Horizontal" Margin="5">
                                 <TextBlock Text="Found:" Foreground="{StaticResource TextSecondary}" Width="65"/>
@@ -194,6 +249,7 @@ catch {
 
                             <Separator Background="#D0D0D0" Margin="0,15"/>
 
+                            <!-- Options -->
                             <Label Content="OPTIONS" Foreground="#9E9E9E" FontSize="10" FontWeight="Bold" Margin="0,0,0,5"/>
                             <Button Name="BtnExportLogs" Content="Export Logs" Height="32" HorizontalContentAlignment="Left"/>
                             <Button Name="BtnSettings" Content="Settings" Height="32" HorizontalContentAlignment="Left" Margin="5,0,5,5"/>
@@ -214,7 +270,7 @@ catch {
                                 <TextBlock Name="TxtCurrentPath" Text="No folder selected" Foreground="{StaticResource TextMuted}" FontStyle="Italic" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                <ComboBox Name="CmbSortBy" Width="140" Height="28" Margin="10,0" Background="{StaticResource ControlBackground}" Foreground="{StaticResource TextPrimary}" BorderBrush="#CCCCCC">
+                                <ComboBox Name="CmbSortBy" Width="140" Height="28" Margin="10,0">
                                     <ComboBoxItem Content="Sort: Name" IsSelected="True"/>
                                     <ComboBoxItem Content="Sort: Status"/>
                                     <ComboBoxItem Content="Sort: Branch"/>
@@ -223,7 +279,7 @@ catch {
                         </Grid>
                     </StackPanel>
 
-                    <!-- Repository Cards List -->
+                    <!-- Repository List -->
                     <ListBox Name="RepoList" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                              VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling">
                         <ListBox.ItemContainerStyle>
@@ -242,7 +298,7 @@ catch {
                         </ListBox.ItemContainerStyle>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Border Background="{StaticResource CardBackground}" CornerRadius="6" Padding="12" 
+                                <Border Background="{StaticResource CardBg}" CornerRadius="6" Padding="12" 
                                         BorderBrush="#E0E0E0" BorderThickness="1" Name="CardBorder">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
@@ -250,7 +306,6 @@ catch {
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         
-                                        <!-- Left Info -->
                                         <StackPanel VerticalAlignment="Center">
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Text="{Binding Name}" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="14"/>
@@ -260,7 +315,6 @@ catch {
                                             <TextBlock Text="{Binding DetailedStatus}" Foreground="{StaticResource TextSecondary}" FontSize="10" Margin="0,2,0,0"/>
                                         </StackPanel>
 
-                                        <!-- Right Status -->
                                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                             <TextBlock Text="{Binding Status}" Foreground="{StaticResource TextSecondary}" FontSize="11" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                             <Ellipse Width="14" Height="14" Fill="{Binding StatusColor}"/>
@@ -279,25 +333,24 @@ catch {
                 </DockPanel>
             </Grid>
 
-            <!-- 3. Footer / Status Bar -->
+            <!-- Status Bar -->
             <Border Grid.Row="2" Background="#0078D4" CornerRadius="0,0,8,8">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     
                     <TextBlock Name="StatusText" Text="Ready" Foreground="White" VerticalAlignment="Center" Margin="15,0" FontWeight="SemiBold" FontSize="11"/>
-                    
-                    <!-- Progress Bar -->
                     <ProgressBar Name="SyncProgressBar" Grid.Column="1" Height="6" Margin="10,0" Background="#33FFFFFF" Foreground="White" BorderThickness="0" Value="0" Maximum="100"/>
-                    
-                    <Button Name="BtnToggleLog" Grid.Column="2" Content="Show Log" Background="Transparent" Foreground="White" Margin="0,0,10,0" FontWeight="Bold"/>
+                    <TextBlock Name="TxtElapsed" Grid.Column="2" Text="" Foreground="#CCFFFFFF" VerticalAlignment="Center" FontSize="10" Margin="10,0"/>
+                    <Button Name="BtnToggleLog" Grid.Column="3" Content="Show Log" Background="Transparent" Foreground="White" Margin="0,0,10,0" FontWeight="Bold"/>
                 </Grid>
             </Border>
 
-            <!-- 4. Log Overlay -->
+            <!-- Log Overlay -->
             <Border Name="LogOverlay" Grid.Row="0" Grid.RowSpan="2" Background="#F2FFFFFF" Margin="20,50,20,10" Visibility="Collapsed" BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="6">
                 <Grid>
                     <Grid.RowDefinitions>
@@ -308,7 +361,7 @@ catch {
                         <Grid>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="Activity Log" Foreground="{StaticResource TextPrimary}" FontWeight="Bold"/>
-                                <Button Name="BtnClearLog" Content="Clear" Margin="15,0,0,0" Height="24" Padding="10,2" Background="{StaticResource ControlBackground}"/>
+                                <Button Name="BtnClearLog" Content="Clear" Margin="15,0,0,0" Height="24" Padding="10,2" Background="{StaticResource ControlBg}"/>
                             </StackPanel>
                             <Button Name="BtnCloseLog" Content="X" HorizontalAlignment="Right" Background="Transparent" Foreground="#FF5252" Width="30" Padding="0"/>
                         </Grid>
@@ -319,999 +372,578 @@ catch {
                 </Grid>
             </Border>
 
-            <!-- 5. Context Menu (will be added programmatically) -->
+            <!-- Settings Overlay -->
+            <Border Name="SettingsOverlay" Grid.Row="0" Grid.RowSpan="3" Background="#CC000000" Visibility="Collapsed">
+                <Border Background="White" CornerRadius="8" Width="400" Height="300" VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <Grid Margin="20">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="Settings" FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"/>
+                        
+                        <StackPanel Grid.Row="1" Margin="0,20,0,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,10">
+                                <TextBlock Text="Max Parallel Operations:" Width="180" VerticalAlignment="Center"/>
+                                <TextBox Name="TxtMaxParallel" Width="60" Text="8"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,10">
+                                <TextBlock Text="Log Retention (days):" Width="180" VerticalAlignment="Center"/>
+                                <TextBox Name="TxtLogRetention" Width="60" Text="30"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,10">
+                                <TextBlock Text="Recent Folders Count:" Width="180" VerticalAlignment="Center"/>
+                                <TextBox Name="TxtRecentCount" Width="60" Text="5"/>
+                            </StackPanel>
+                        </StackPanel>
+                        
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Name="BtnSettingsCancel" Content="Cancel" Width="80"/>
+                            <Button Name="BtnSettingsSave" Content="Save" Width="80" Background="{StaticResource AccentGradient}" Foreground="White"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Border>
         </Grid>
     </Border>
 </Window>
 "@
+#endregion
 
-# -----------------------------------------------------------------------------
-# POWERSHELL LOGIC
-# -----------------------------------------------------------------------------
-
-# Helper to load XAML
-$reader = (New-Object System.Xml.XmlNodeReader $xaml)
-try {
-    $window = [Windows.Markup.XamlReader]::Load($reader)
-}
-catch {
-    Write-Error "Failed to load XAML: $_"
-    exit
-}
-
-# Connect standard controls
-$controls = @(
-    "TitleBarArea", "MinimizeButton", "CloseButton", 
-    "BtnSelectFolder", "BtnScan", "BtnRefresh", "BtnSyncAll", 
-    "TxtCountFound", "TxtCountSuccess", "TxtCountFailed", "TxtCountDirty",
-    "TxtCurrentPath", "RepoList", "StatusText",
-    "BtnToggleLog", "LogOverlay", "BtnCloseLog", "BtnClearLog", "LogTextBox", "LogScroll", "SyncProgressBar",
-    "TxtSearch", "TxtSearchHelper", "CmbStatusFilter", "CmbSortBy", 
-    "BtnExportLogs", "BtnSettings"
-)
-foreach ($id in $controls) {
-    $control = $window.FindName($id)
-    if ($control -eq $null) {
-        Write-Host "WARNING: Control '$id' not found in XAML" -ForegroundColor Yellow
+#region Settings_Management
+Function Load-Settings {
+    if (Test-Path $Script:SettingsFile) {
+        try {
+            $json = Get-Content $Script:SettingsFile -Raw | ConvertFrom-Json
+            $Script:Settings = @{
+                MaxParallel        = if ($json.MaxParallel) { $json.MaxParallel } else { 8 }
+                LogRetentionDays   = if ($json.LogRetentionDays) { $json.LogRetentionDays } else { 30 }
+                RecentFoldersCount = if ($json.RecentFoldersCount) { $json.RecentFoldersCount } else { 5 }
+                RecentFolders      = if ($json.RecentFolders) { @($json.RecentFolders) } else { @() }
+            }
+        }
+        catch { $Script:Settings = $Script:DefaultSettings.Clone() }
     }
-    Set-Variable -Name $id -Value $control -Scope Script
+    else { $Script:Settings = $Script:DefaultSettings.Clone() }
 }
 
-# --------------------------------------------------
-# Window Events (Chrome-less dragging)
-# --------------------------------------------------
-$TitleBarArea.Add_MouseLeftButtonDown({
-        param($sender, $e)
-        $window.DragMove()
-    })
+Function Save-Settings {
+    try {
+        if (-not (Test-Path $Script:SettingsDir)) { New-Item -ItemType Directory -Path $Script:SettingsDir -Force | Out-Null }
+        $Script:Settings | ConvertTo-Json | Out-File $Script:SettingsFile -Encoding UTF8
+    }
+    catch { }
+}
 
-$MinimizeButton.Add_Click({
-        $window.WindowState = "Minimized"
-    })
+Function Add-RecentFolder($path) {
+    $list = [System.Collections.ArrayList]@($Script:Settings.RecentFolders)
+    $list.Remove($path)
+    $list.Insert(0, $path)
+    while ($list.Count -gt $Script:Settings.RecentFoldersCount) { $list.RemoveAt($list.Count - 1) }
+    $Script:Settings.RecentFolders = @($list)
+    Save-Settings
+}
+#endregion
 
-$CloseButton.Add_Click({
-        $window.Close()
-    })
+#region XAML_Loading
+$reader = (New-Object System.Xml.XmlNodeReader $xaml)
+try { $window = [Windows.Markup.XamlReader]::Load($reader) }
+catch { Write-Error "Failed to load XAML: $_"; exit }
 
-# --------------------------------------------------
-# Application State
-# --------------------------------------------------
+$controls = @(
+    "TitleBarArea", "MinimizeButton", "CloseButton", "BtnSelectFolder", "BtnScan", "BtnRefresh", "BtnSyncAll",
+    "TxtCountFound", "TxtCountSuccess", "TxtCountFailed", "TxtCountDirty", "TxtCurrentPath", "RepoList", "StatusText", "TxtElapsed",
+    "BtnToggleLog", "LogOverlay", "BtnCloseLog", "BtnClearLog", "LogTextBox", "LogScroll", "SyncProgressBar",
+    "TxtSearch", "TxtSearchHelper", "CmbStatusFilter", "CmbSortBy", "BtnExportLogs", "BtnSettings", "RecentList",
+    "SettingsOverlay", "TxtMaxParallel", "TxtLogRetention", "TxtRecentCount", "BtnSettingsCancel", "BtnSettingsSave"
+)
+foreach ($id in $controls) { Set-Variable -Name $id -Value ($window.FindName($id)) -Scope Script }
+#endregion
+
+#region Application_State
 $Script:SelectedFolder = ""
 $Script:AllRepos = [System.Collections.ObjectModel.ObservableCollection[System.Object]]::new()
 $Script:FilteredRepos = [System.Collections.ObjectModel.ObservableCollection[System.Object]]::new()
 $RepoList.ItemsSource = $Script:FilteredRepos
 
-# --------------------------------------------------
-# Context Menu Setup
-# --------------------------------------------------
-$Script:RepoContextMenu = New-Object System.Windows.Controls.ContextMenu
+$Script:LogQueue = [System.Collections.Queue]::Synchronized([System.Collections.Queue]::new())
+$Script:StatusQueue = [System.Collections.Queue]::Synchronized([System.Collections.Queue]::new())
+$Script:SyncQueue = [System.Collections.Queue]::Synchronized([System.Collections.Queue]::new())
+$Script:ScanQueue = [System.Collections.Queue]::Synchronized([System.Collections.Queue]::new())
 
-$menuItemSync = New-Object System.Windows.Controls.MenuItem
-$menuItemSync.Header = "Sync This Repository"
-$menuItemSync.Add_Click({
-        $selectedRepo = $RepoList.SelectedItem
-        if ($selectedRepo) {
-            Sync-SingleRepository $selectedRepo
-        }
-    })
+$Script:RunspacePool = $null
+$Script:SyncRunspace = $null
+$Script:ScanRunspace = $null
+$Script:StatusPool = [System.Collections.Generic.List[PSObject]]::new()
+$Script:CurrentLogFile = $null
+$Script:SyncStartTime = $null
+$Script:MainTimer = $null
 
-$menuItemRefresh = New-Object System.Windows.Controls.MenuItem
-$menuItemRefresh.Header = "Refresh Status"
-$menuItemRefresh.Add_Click({
-        $selectedRepo = $RepoList.SelectedItem
-        if ($selectedRepo) {
-            Update-RepoStatus $selectedRepo
-        }
-    })
+Load-Settings
+#endregion
 
-$menuItemExplorer = New-Object System.Windows.Controls.MenuItem
-$menuItemExplorer.Header = "Open in Explorer"
-$menuItemExplorer.Add_Click({
-        $selectedRepo = $RepoList.SelectedItem
-        if ($selectedRepo -and (Test-Path $selectedRepo.Path)) {
-            Start-Process "explorer.exe" $selectedRepo.Path
-        }
-    })
+#region Async_Infrastructure
+Function Initialize-RunspacePool {
+    if ($Script:RunspacePool) { $Script:RunspacePool.Dispose() }
+    $limit = [Math]::Min($Script:Settings.MaxParallel, [Environment]::ProcessorCount * 2)
+    $Script:RunspacePool = [runspacefactory]::CreateRunspacePool(1, $limit)
+    $Script:RunspacePool.Open()
+    $Script:StatusPool.Clear()
+}
 
-$menuItemCopy = New-Object System.Windows.Controls.MenuItem
-$menuItemCopy.Header = "Copy Path"
-$menuItemCopy.Add_Click({
-        $selectedRepo = $RepoList.SelectedItem
-        if ($selectedRepo) {
-            Set-Clipboard $selectedRepo.Path
-            Update-Status "Path copied to clipboard"
-        }
-    })
+Function Start-MainTimer {
+    if ($null -eq $Script:MainTimer) {
+        $Script:MainTimer = New-Object System.Windows.Threading.DispatcherTimer
+        $Script:MainTimer.Interval = [TimeSpan]::FromMilliseconds(50)
+        $Script:MainTimer.Add_Tick({ Process-AllQueues })
+    }
+    $Script:MainTimer.Start()
+}
 
-$Script:RepoContextMenu.Items.Add($menuItemSync)
-$Script:RepoContextMenu.Items.Add($menuItemRefresh)
-$Script:RepoContextMenu.Items.Add((New-Object System.Windows.Controls.Separator))
-$Script:RepoContextMenu.Items.Add($menuItemExplorer)
-$Script:RepoContextMenu.Items.Add($menuItemCopy)
+Function Process-AllQueues {
+    Process-LogQueue
+    Process-ScanQueue
+    Process-StatusQueue
+    Process-SyncQueue
+    Update-ElapsedTime
+}
 
-$RepoList.ContextMenu = $Script:RepoContextMenu
+Function Process-LogQueue {
+    $count = 0
+    while ($Script:LogQueue.Count -gt 0 -and $count -lt 20) {
+        $entry = $Script:LogQueue.Dequeue()
+        $count++
+        $line = "[$($entry.Time)][$($entry.Level)] $($entry.Message)`r`n"
+        if ($LogTextBox) { $LogTextBox.AppendText($line); $LogScroll.ScrollToEnd() }
+    }
+}
 
-# --------------------------------------------------
-# Keyboard Shortcuts
-# --------------------------------------------------
-$window.Add_KeyDown({
-        param($sender, $e)
-        
-        if ($e.Key -eq "F" -and $e.KeyboardDevice.Modifiers -eq "Control") {
-            $TxtSearch.Focus()
-            $e.Handled = $true
-        }
-        elseif ($e.Key -eq "R" -and $e.KeyboardDevice.Modifiers -eq "Control") {
-            Refresh-AllRepoStatus
-            $e.Handled = $true
-        }
-        elseif ($e.Key -eq "S" -and $e.KeyboardDevice.Modifiers -eq "Control") {
-            if ($BtnSyncAll.IsEnabled) {
-                Sync-Repositories
-            }
-            $e.Handled = $true
-        }
-        elseif ($e.Key -eq "F5") {
-            Refresh-AllRepoStatus
-            $e.Handled = $true
-        }
-    })
+Function Update-ElapsedTime {
+    if ($Script:SyncStartTime -and $TxtElapsed) {
+        $elapsed = (Get-Date) - $Script:SyncStartTime
+        $TxtElapsed.Text = "{0:mm\:ss}" -f $elapsed
+    }
+}
+#endregion
 
-# --------------------------------------------------
-# Functions
-# --------------------------------------------------
+#region Logging_Functions
+Function Write-Log($msg, $level = "INFO") {
+    $timestamp = Get-Date -Format "HH:mm:ss"
+    $entry = @{ Time = $timestamp; Level = $level; Message = $msg }
+    $Script:LogQueue.Enqueue($entry)
+    if ($Script:CurrentLogFile) {
+        try { "[$timestamp][$level] $msg" | Out-File $Script:CurrentLogFile -Append -Encoding UTF8 } catch { }
+    }
+}
+
 Function Update-Status($msg) {
     if ($StatusText) { $StatusText.Text = $msg }
     [System.Windows.Forms.Application]::DoEvents()
 }
 
-Function Log-Message($msg, $toFile = $true) {
-    $timestamp = (Get-Date).ToString("HH:mm:ss")
-    $logLine = "[$timestamp] $msg"
-    
-    $LogTextBox.AppendText($logLine + "`r`n")
-    $LogScroll.ScrollToEnd()
-    
-    if ($toFile -and $Script:CurrentLogFile) {
-        $logLine | Out-File $Script:CurrentLogFile -Append -Encoding UTF8
-    }
-}
-
-Function Get-GitStatus($repoPath) {
+Function Update-Statistics {
     try {
-        Push-Location $repoPath
-        $env:GIT_REDIRECT_STDERR_TO_STDOUT = "1"
-        
-        # Get branch and tracking info
-        $status = git status --porcelain -b 2>&1
-        
-        $result = @{
-            Branch         = "unknown"
-            IsDirty        = $false
-            Ahead          = 0
-            Behind         = 0
-            Status         = "Clean"
-            StatusColor    = "#4CAF50"
-            DetailedStatus = ""
-        }
-        
-        if ($status) {
-            $branchLine = $status[0]
-            
-            # Parse branch
-            if ($branchLine -match '## (.+?)\.\.\.') {
-                $result.Branch = $matches[1]
-            }
-            elseif ($branchLine -match '## (.+)$') {
-                $result.Branch = $matches[1]
-            }
-            
-            # Parse ahead/behind
-            if ($branchLine -match '\[ahead (\d+)\]') {
-                $result.Ahead = [int]$matches[1]
-            }
-            if ($branchLine -match '\[behind (\d+)\]') {
-                $result.Behind = [int]$matches[1]
-            }
-            if ($branchLine -match '\[ahead (\d+), behind (\d+)\]') {
-                $result.Ahead = [int]$matches[1]
-                $result.Behind = [int]$matches[2]
-            }
-            
-            # Check for dirty status
-            if ($status.Count -gt 1) {
-                $result.IsDirty = $true
-            }
-            
-            # Determine overall status
-            if ($result.IsDirty) {
-                $result.Status = "Dirty"
-                $result.StatusColor = "#FFC107"
-                $result.DetailedStatus = "Uncommitted changes"
-            }
-            elseif ($result.Ahead -gt 0 -and $result.Behind -gt 0) {
-                $result.Status = "Diverged"
-                $result.StatusColor = "#9C27B0"
-                $result.DetailedStatus = "Ahead $($result.Ahead), Behind $($result.Behind)"
-            }
-            elseif ($result.Ahead -gt 0) {
-                $result.Status = "Ahead"
-                $result.StatusColor = "#2196F3"
-                $result.DetailedStatus = "Ahead by $($result.Ahead) commit$(if($result.Ahead -ne 1){'s'})"
-            }
-            elseif ($result.Behind -gt 0) {
-                $result.Status = "Behind"
-                $result.StatusColor = "#FF9800"
-                $result.DetailedStatus = "Behind by $($result.Behind) commit$(if($result.Behind -ne 1){'s'})"
-            }
-            else {
-                $result.Status = "Clean"
-                $result.StatusColor = "#4CAF50"
-                $result.DetailedStatus = "Up to date"
-            }
-        }
-        
-        return $result
+        $success = ($Script:AllRepos | Where-Object { $_.Status -eq "Synced" -or $_.Status -eq "Clean" }).Count
+        $failed = ($Script:AllRepos | Where-Object { $_.Status -eq "Error" -or $_.Status -eq "Failed" }).Count
+        $dirty = ($Script:AllRepos | Where-Object { $_.IsDirty }).Count
+        if ($TxtCountFound) { $TxtCountFound.Text = $Script:AllRepos.Count.ToString() }
+        if ($TxtCountSuccess) { $TxtCountSuccess.Text = $success.ToString() }
+        if ($TxtCountFailed) { $TxtCountFailed.Text = $failed.ToString() }
+        if ($TxtCountDirty) { $TxtCountDirty.Text = $dirty.ToString() }
     }
-    catch {
-        return @{
-            Branch         = "error"
-            IsDirty        = $false
-            Ahead          = 0
-            Behind         = 0
-            Status         = "Error"
-            StatusColor    = "#FF5252"
-            DetailedStatus = "Failed to get status"
+    catch { }
+}
+
+Function Update-RecentList {
+    if ($RecentList) {
+        $RecentList.Items.Clear()
+        foreach ($folder in $Script:Settings.RecentFolders) {
+            $name = Split-Path $folder -Leaf
+            $item = New-Object System.Windows.Controls.ListBoxItem
+            $item.Content = $name
+            $item.ToolTip = $folder
+            $item.Tag = $folder
+            $RecentList.Items.Add($item)
         }
     }
-    finally {
-        Pop-Location
+}
+#endregion
+
+#region Git_Operations
+Function Submit-StatusJob($repoPath) {
+    $workerScript = {
+        param($repoPath, $queue)
+        $res = @{ Path = $repoPath; Branch = "unknown"; IsDirty = $false; Ahead = 0; Behind = 0; Status = "Clean"; StatusColor = "#4CAF50"; DetailedStatus = "Up to date" }
+        try {
+            Push-Location $repoPath
+            $branch = git rev-parse --abbrev-ref HEAD 2>&1
+            if ($LASTEXITCODE -eq 0 -and $branch) { $res.Branch = $branch.Trim() }
+            $dirty = @(git status --porcelain 2>&1)
+            if ($dirty.Count -gt 0 -and $dirty[0] -notmatch '^fatal:') { $res.IsDirty = $true }
+            $upstream = git rev-parse --abbrev-ref "@{u}" 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $ahead = git rev-list --count "@{u}..HEAD" 2>&1; if ($LASTEXITCODE -eq 0) { $res.Ahead = [int]$ahead }
+                $behind = git rev-list --count "HEAD..@{u}" 2>&1; if ($LASTEXITCODE -eq 0) { $res.Behind = [int]$behind }
+            }
+            if ($res.IsDirty) { $res.Status = "Dirty"; $res.StatusColor = "#FFC107"; $res.DetailedStatus = "Uncommitted changes" }
+            elseif ($res.Ahead -gt 0 -and $res.Behind -gt 0) { $res.Status = "Diverged"; $res.StatusColor = "#9C27B0"; $res.DetailedStatus = "Ahead $($res.Ahead), Behind $($res.Behind)" }
+            elseif ($res.Ahead -gt 0) { $res.Status = "Ahead"; $res.StatusColor = "#2196F3"; $res.DetailedStatus = "Ahead $($res.Ahead) commits" }
+            elseif ($res.Behind -gt 0) { $res.Status = "Behind"; $res.StatusColor = "#FF9800"; $res.DetailedStatus = "Behind $($res.Behind) commits" }
+        }
+        catch { $res.Status = "Error"; $res.StatusColor = "#FF5252"; $res.DetailedStatus = "Check failed" }
+        finally { Pop-Location }
+        $queue.Enqueue($res)
+    }
+    if ($Script:RunspacePool -and $Script:RunspacePool.RunspacePoolStateInfo.State -eq "Opened") {
+        $ps = [PowerShell]::Create()
+        $ps.RunspacePool = $Script:RunspacePool
+        [void]$ps.AddScript($workerScript).AddArgument($repoPath).AddArgument($Script:StatusQueue)
+        [void]$ps.BeginInvoke()
+        $Script:StatusPool.Add($ps)
     }
 }
 
-Function Update-RepoStatus($repoObj) {
-    $gitStatus = Get-GitStatus $repoObj.Path
-    
-    $repoObj.Branch = $gitStatus.Branch
-    $repoObj.Status = $gitStatus.Status
-    $repoObj.StatusColor = $gitStatus.StatusColor
-    $repoObj.DetailedStatus = $gitStatus.DetailedStatus
-    $repoObj.IsDirty = $gitStatus.IsDirty
-    $repoObj.Ahead = $gitStatus.Ahead
-    $repoObj.Behind = $gitStatus.Behind
-    
-    $RepoList.Items.Refresh()
-    Update-Statistics
+Function Process-StatusQueue {
+    $count = 0
+    while ($Script:StatusQueue.Count -gt 0 -and $count -lt 20) {
+        $res = $Script:StatusQueue.Dequeue(); $count++
+        $repo = $Script:AllRepos | Where-Object { $_.Path -eq $res.Path } | Select-Object -First 1
+        if ($repo) {
+            $repo.Branch = $res.Branch; $repo.Status = $res.Status; $repo.StatusColor = $res.StatusColor
+            $repo.DetailedStatus = $res.DetailedStatus; $repo.IsDirty = $res.IsDirty; $repo.Ahead = $res.Ahead; $repo.Behind = $res.Behind
+            Write-Log "Status: $($repo.Name) [$($res.Branch)] - $($res.Status)"
+        }
+    }
+    if ($count -gt 0) { $RepoList.Items.Refresh(); Update-Statistics }
+    $running = $false
+    foreach ($ps in $Script:StatusPool) { if ($ps.InvocationStateInfo.State -eq "Running") { $running = $true; break } }
+    if (-not $running -and $Script:StatusQueue.Count -eq 0 -and $Script:StatusPool.Count -gt 0) {
+        $Script:StatusPool.Clear(); Update-Status "Status check complete"; Write-Log "Status refresh complete"
+    }
 }
 
+Function Start-BackgroundStatusCheck {
+    if ($Script:AllRepos.Count -eq 0) { return }
+    Update-Status "Checking repository status..."
+    Initialize-RunspacePool
+    Start-MainTimer
+    $snapshot = @($Script:AllRepos | ForEach-Object { $_.Path })
+    foreach ($path in $snapshot) { Submit-StatusJob $path }
+}
+#endregion
+
+#region Scan_Operations
 Function Scan-Repositories {
-    if ([string]::IsNullOrWhiteSpace($Script:SelectedFolder)) {
-        Update-Status "Please select a folder first!"
-        return
-    }
-
+    if ([string]::IsNullOrWhiteSpace($Script:SelectedFolder)) { Update-Status "Please select a folder first!"; return }
+    
     $Script:AllRepos.Clear()
     $Script:FilteredRepos.Clear()
     $TxtCountFound.Text = "0"
-    Update-Status "Scanning for .git folders..."
-
-    $subfolders = Get-ChildItem -Path $Script:SelectedFolder -Directory
+    $Script:ScanQueue.Clear()
+    Update-Status "Scanning for repositories..."
     
-    $count = 0
-    foreach ($folder in $subfolders) {
-        $gitPath = Join-Path $folder.FullName ".git"
-        if (Test-Path $gitPath) {
-            $count++
-            
-            # Get git status
-            $gitStatus = Get-GitStatus $folder.FullName
-            
-            $repoObj = [PSCustomObject]@{
-                Name           = $folder.Name
-                Path           = $folder.FullName
-                Branch         = $gitStatus.Branch
-                Status         = "Pending"
-                StatusColor    = "#757575"
-                DetailedStatus = ""
-                IsDirty        = $false
-                Ahead          = 0
-                Behind         = 0
-                LastSync       = $null
-            }
-            
-            $Script:AllRepos.Add($repoObj)
-            $Script:FilteredRepos.Add($repoObj)
-            $TxtCountFound.Text = $count.ToString()
-            [System.Windows.Forms.Application]::DoEvents()
+    $scanBlock = {
+        param($path, $queue)
+        Get-ChildItem -Path $path -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+            $gitPath = Join-Path $_.FullName ".git"
+            if (Test-Path $gitPath) { $queue.Enqueue(@{ Name = $_.Name; Path = $_.FullName }) }
         }
     }
     
-    Update-Status "Scan Complete. Found $count repositories."
-    Log-Message "Scan Complete: Found $count repositories"
+    $Script:ScanRunspace = [PowerShell]::Create().AddScript($scanBlock).AddArgument($Script:SelectedFolder).AddArgument($Script:ScanQueue)
+    $Script:ScanRunspace.BeginInvoke()
     
-    # Start background status check
-    if ($count -gt 0) {
-        Update-Status "Checking repository status..."
+    Initialize-RunspacePool
+    Start-MainTimer
+}
+
+Function Process-ScanQueue {
+    while ($Script:ScanQueue.Count -gt 0) {
+        $item = $Script:ScanQueue.Dequeue()
+        if ($item.Name) {
+            $repoObj = [PSCustomObject]@{
+                Name = $item.Name; Path = $item.Path; Branch = "..."; Status = "Pending"; StatusColor = "#757575"
+                DetailedStatus = "Checking..."; IsDirty = $false; Ahead = 0; Behind = 0; LastSync = $null
+            }
+            $Script:AllRepos.Add($repoObj)
+            $Script:FilteredRepos.Add($repoObj)
+            $TxtCountFound.Text = $Script:AllRepos.Count.ToString()
+            Write-Log "Found: $($item.Name)"
+            Submit-StatusJob $item.Path
+        }
+    }
+    [System.Windows.Forms.Application]::DoEvents()
+    
+    if ($Script:ScanRunspace -and $Script:ScanRunspace.InvocationStateInfo.State -ne "Running") {
+        $Script:ScanRunspace.Dispose()
+        $Script:ScanRunspace = $null
+        Update-Status "Scan complete. Found $($Script:AllRepos.Count) repositories."
+        Write-Log "Scan complete: $($Script:AllRepos.Count) repositories"
+    }
+}
+#endregion
+
+#region Sync_Operations
+Function Sync-Repositories {
+    $count = $Script:AllRepos.Count
+    if ($count -eq 0) { return }
+    
+    $BtnSyncAll.IsEnabled = $false; $BtnScan.IsEnabled = $false; $BtnRefresh.IsEnabled = $false
+    $SyncProgressBar.Value = 0
+    $Script:SyncStartTime = Get-Date
+    Update-Status "Starting sync..."
+    
+    $Script:AllRepos | ForEach-Object { $_.Status = "Pending..."; $_.StatusColor = "#757575" }
+    $RepoList.Items.Refresh()
+    
+    # Setup logging
+    $parentName = Split-Path $Script:SelectedFolder -Leaf
+    $dateStamp = Get-Date -Format "yyyy-MM-dd"
+    $Script:CurrentLogFile = Join-Path $Script:SelectedFolder "$dateStamp-$parentName.log"
+    
+    $Script:SyncQueue.Clear()
+    $LogTextBox.Text = "--- Sync Started: $(Get-Date) ---`r`n"
+    if ($LogOverlay.Visibility -eq "Collapsed") { $LogOverlay.Visibility = "Visible" }
+    
+    $repoPaths = $Script:AllRepos | Select-Object -ExpandProperty Path
+    
+    $syncBlock = {
+        param($paths, $queue, $logFile)
+        function Log-Msg($msg) {
+            $time = (Get-Date).ToString("HH:mm:ss")
+            "[$time] $msg" | Out-File $logFile -Append -Encoding UTF8
+            $queue.Enqueue(@{ Type = "Log"; Time = $time; Message = $msg })
+        }
+        Log-Msg "=== SYNC JOB STARTED ==="
+        $total = $paths.Count; $i = 0
+        foreach ($path in $paths) {
+            $i++
+            $queue.Enqueue(@{ Type = "Progress"; Path = $path; Index = $i; Total = $total })
+            Log-Msg "[$i/$total] Processing: $(Split-Path $path -Leaf)"
+            $status = "Failed"; $color = "#FF5252"
+            if (Test-Path $path) {
+                try {
+                    Push-Location $path
+                    $env:GIT_REDIRECT_STDERR_TO_STDOUT = "1"
+                    Log-Msg "  [CMD] git fetch --all"
+                    $fetch = git fetch --all 2>&1; if ($fetch) { foreach ($l in $fetch) { Log-Msg "    $l" } }
+                    Log-Msg "  [CMD] git pull"
+                    $pull = git pull 2>&1; if ($pull) { foreach ($l in $pull) { Log-Msg "    $l" } }
+                    if ($LASTEXITCODE -eq 0) { $status = "Synced"; $color = "#4CAF50"; Log-Msg "  [RES] SUCCESS" }
+                    else { Log-Msg "  [RES] Exit code: $LASTEXITCODE" }
+                }
+                catch { Log-Msg "  [ERR] $_" }
+                finally { Pop-Location }
+            }
+            else { Log-Msg "  [ERR] Path not found" }
+            $queue.Enqueue(@{ Type = "Result"; Path = $path; Status = $status; Color = $color })
+        }
+        Log-Msg "=== SYNC JOB COMPLETED ==="
+    }
+    
+    $Script:SyncRunspace = [PowerShell]::Create().AddScript($syncBlock).AddArgument($repoPaths).AddArgument($Script:SyncQueue).AddArgument($Script:CurrentLogFile)
+    $Script:SyncRunspace.BeginInvoke()
+    Start-MainTimer
+}
+
+Function Process-SyncQueue {
+    while ($Script:SyncQueue.Count -gt 0) {
+        $msg = $Script:SyncQueue.Dequeue()
+        $repo = $Script:AllRepos | Where-Object { $_.Path -eq $msg.Path } | Select-Object -First 1
+        
+        if ($msg.Type -eq "Progress") {
+            if ($repo) { $repo.Status = "Syncing..."; $repo.StatusColor = "#00BCD4" }
+            $percent = [math]::Round(($msg.Index / $msg.Total) * 100)
+            $SyncProgressBar.Value = $percent
+            Update-Status "Syncing [$($msg.Index)/$($msg.Total)]: $(Split-Path $msg.Path -Leaf)"
+            $RepoList.Items.Refresh()
+        }
+        elseif ($msg.Type -eq "Log") {
+            $LogTextBox.AppendText("[$($msg.Time)] $($msg.Message)`r`n")
+            $LogScroll.ScrollToEnd()
+        }
+        elseif ($msg.Type -eq "Result") {
+            if ($repo) { $repo.Status = $msg.Status; $repo.StatusColor = $msg.Color; if ($msg.Status -eq "Synced") { $repo.LastSync = Get-Date } }
+            $RepoList.Items.Refresh()
+            Update-Statistics
+        }
+    }
+    
+    if ($Script:SyncRunspace -and $Script:SyncRunspace.InvocationStateInfo.State -ne "Running") {
+        $Script:SyncRunspace.Dispose()
+        $Script:SyncRunspace = $null
+        $BtnSyncAll.IsEnabled = $true; $BtnScan.IsEnabled = $true; $BtnRefresh.IsEnabled = $true
+        $SyncProgressBar.Value = 100
+        $Script:SyncStartTime = $null
+        Update-Status "Sync Complete!"
+        Write-Log "Sync operation completed"
         Start-BackgroundStatusCheck
     }
 }
+#endregion
 
-# Old synchronous Start-BackgroundStatusCheck removed - using async version defined later
-
-Function Refresh-AllRepoStatus {
-    if ($Script:AllRepos.Count -eq 0) {
-        return
-    }
-    
-    Update-Status "Refreshing status for all repositories..."
-    Log-Message "Refreshing repository status..."
-    
-    # Use the async background status check instead of synchronous loop
-    Start-BackgroundStatusCheck
-}
-
-Function Update-Statistics {
-    try {
-        $successCount = ($Script:AllRepos | Where-Object { $_.Status -eq "Synced" -or $_.Status -eq "Clean" }).Count
-        $failedCount = ($Script:AllRepos | Where-Object { $_.Status -eq "Error" -or $_.Status -eq "Failed" }).Count
-        $dirtyCount = ($Script:AllRepos | Where-Object { $_.IsDirty }).Count
-        
-        if ($Script:TxtCountFound -ne $null -and $Script:TxtCountFound.Text -ne $null) { 
-            $Script:TxtCountFound.Text = $Script:AllRepos.Count.ToString() 
-        }
-        if ($Script:TxtCountSuccess -ne $null -and $Script:TxtCountSuccess.Text -ne $null) { 
-            $Script:TxtCountSuccess.Text = $successCount.ToString() 
-        }
-        if ($Script:TxtCountFailed -ne $null -and $Script:TxtCountFailed.Text -ne $null) { 
-            $Script:TxtCountFailed.Text = $failedCount.ToString() 
-        }
-        if ($Script:TxtCountDirty -ne $null -and $Script:TxtCountDirty.Text -ne $null) { 
-            $Script:TxtCountDirty.Text = $dirtyCount.ToString() 
-        }
-    }
-    catch {
-        # Silently ignore statistics update errors
-    }
-}
-
+#region Filter_Sort
 Function Apply-Filter {
     $searchText = $TxtSearch.Text.Trim().ToLower()
     $statusFilter = $CmbStatusFilter.SelectedItem.Content
     
     $Script:FilteredRepos.Clear()
-    
     foreach ($repo in $Script:AllRepos) {
-        $matchSearch = [string]::IsNullOrWhiteSpace($searchText) -or 
-        $repo.Name.ToLower().Contains($searchText) -or 
-        $repo.Path.ToLower().Contains($searchText) -or
-        $repo.Branch.ToLower().Contains($searchText)
-        
+        $matchSearch = [string]::IsNullOrWhiteSpace($searchText) -or $repo.Name.ToLower().Contains($searchText) -or $repo.Path.ToLower().Contains($searchText)
         $matchStatus = ($statusFilter -eq "All Status") -or ($repo.Status -eq $statusFilter)
-        
-        if ($matchSearch -and $matchStatus) {
-            $Script:FilteredRepos.Add($repo)
-        }
+        if ($matchSearch -and $matchStatus) { $Script:FilteredRepos.Add($repo) }
     }
 }
 
 Function Apply-Sort {
     $sortMode = $CmbSortBy.SelectedItem.Content
-    
     $sorted = switch ($sortMode) {
         "Sort: Name" { $Script:AllRepos | Sort-Object Name }
         "Sort: Status" { $Script:AllRepos | Sort-Object Status }
         "Sort: Branch" { $Script:AllRepos | Sort-Object Branch }
         default { $Script:AllRepos }
     }
-    
     $Script:AllRepos.Clear()
-    foreach ($item in $sorted) {
-        $Script:AllRepos.Add($item)
-    }
-    
+    foreach ($item in $sorted) { $Script:AllRepos.Add($item) }
     Apply-Filter
 }
+#endregion
 
-# --------------------------------------------------
-# Async Sync Logic
-# --------------------------------------------------
-$Script:SyncTimer = $null
-$Script:SyncRunspace = $null
-$Script:SyncQueue = [System.Collections.Queue]::Synchronized([System.Collections.Queue]::new())
-$Script:CurrentLogFile = $null
+#region Context_Menu
+$Script:RepoContextMenu = New-Object System.Windows.Controls.ContextMenu
 
-# Async Scanning Logic
-$Script:ScanTimer = $null
-$Script:ScanRunspace = $null
-$Script:ScanQueue = [System.Collections.Queue]::Synchronized([System.Collections.Queue]::new())
-
-# Async Status Logic
-$Script:StatusTimer = $null
-$Script:StatusRunspacePool = $null
-$Script:StatusResultQueue = [System.Collections.Queue]::Synchronized([System.Collections.Queue]::new())
-$Script:StatusPool = [System.Collections.Generic.List[PSObject]]::new() # Keep track of running pipelines
-
-Function Sync-SingleRepository($repoObj) {
-    Update-Status "Syncing $($repoObj.Name)..."
-    Log-Message "Starting sync for: $($repoObj.Name)"
-    
-    $repoObj.Status = "Syncing..."
-    $repoObj.StatusColor = "#00BCD4"
-    $RepoList.Items.Refresh()
-    
-    try {
-        Push-Location $repoObj.Path
-        $env:GIT_REDIRECT_STDERR_TO_STDOUT = "1"
-        
-        Log-Message "  [CMD] git fetch --all"
-        $fetch = git fetch --all 2>&1
-        if ($fetch) { Log-Message "  $fetch" }
-        
-        Log-Message "  [CMD] git pull"
-        $pull = git pull 2>&1
-        if ($pull) { Log-Message "  $pull" }
-        
-        if ($LASTEXITCODE -eq 0) {
-            $repoObj.Status = "Synced"
-            $repoObj.StatusColor = "#4CAF50"
-            $repoObj.LastSync = Get-Date
-            Log-Message "  [RESULT] SUCCESS"
-        }
-        else {
-            $repoObj.Status = "Error"
-            $repoObj.StatusColor = "#FF5252"
-            Log-Message "  [RESULT] Git exit code: $LASTEXITCODE"
-        }
-    }
-    catch {
-        $repoObj.Status = "Error"
-        $repoObj.StatusColor = "#FF5252"
-        Log-Message "  [ERROR] $_"
-    }
-    finally {
-        Pop-Location
-        $RepoList.Items.Refresh()
-        Update-Statistics
-        Update-Status "Ready"
-        
-        # Refresh status after sync
-        Update-RepoStatus $repoObj
-    }
-}
-
-Function Sync-Repositories {
-    $count = $Script:AllRepos.Count
-    if ($count -eq 0) { return }
-
-    # Disable UI
-    $BtnSyncAll.IsEnabled = $false
-    $BtnScan.IsEnabled = $false
-    $BtnRefresh.IsEnabled = $false
-    $SyncProgressBar.Value = 0
-    Update-Status "Starting sync operation..."
-
-    # Reset Stats
-    $Script:AllRepos | ForEach-Object { 
-        $_.Status = "Pending..." 
-        $_.StatusColor = "#757575" 
-    }
-    $RepoList.Items.Refresh()
-
-    # Prepare Data for Background Thread
-    $repoPaths = $Script:AllRepos | Select-Object -ExpandProperty Path
-    
-    # SETUP LOGGING
-    $parentName = Split-Path $Script:SelectedFolder -Leaf
-    $dateStamp = Get-Date -Format "yyyy-MM-dd"
-    $Script:CurrentLogFile = Join-Path $Script:SelectedFolder "$dateStamp-$parentName.log"
-    
-    # Clear Queue & Log Box
-    $Script:SyncQueue.Clear()
-    $LogTextBox.Text = "--- Sync Started: $(Get-Date) ---`r`n"
-    if ($LogOverlay.Visibility -eq "Collapsed") { $LogOverlay.Visibility = "Visible" }
-
-    # Create ScriptBlock for Background Worker
-    $syncBlock = {
-        param($paths, $queue, $logFile)
-        
-        function Log-Msg ($msg) {
-            $time = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-            "[$time] $msg" | Out-File $logFile -Append -Encoding UTF8
-            $queue.Enqueue(@{ Type = "Log"; Msg = "[$time] $msg" })
-        }
-
-        Log-Msg "======================================================="
-        Log-Msg "STARTING SYNC JOB"
-        Log-Msg "======================================================="
-
-        $total = $paths.Count
-        $i = 0
-
-        foreach ($path in $paths) {
-            $i++
-            
-            $queue.Enqueue(@{ Type = "Progress"; Path = $path; Index = $i; Total = $total })
-            Log-Msg "[$i/$total] PROCESSING: $path"
-            
-            $status = "Failed"
-            $color = "#FF5252"
-            
-            if (Test-Path $path) {
-                try {
-                    Push-Location $path
-                    $env:GIT_REDIRECT_STDERR_TO_STDOUT = "1"
-                    
-                    Log-Msg "   [CMD] git fetch --all"
-                    $fetch = git fetch --all 2>&1 
-                    if ($fetch) { foreach ($l in $fetch) { Log-Msg "      $l" } }
-
-                    Log-Msg "   [CMD] git pull"
-                    $pull = git pull 2>&1
-                    if ($pull) { foreach ($l in $pull) { Log-Msg "      $l" } }
-                    
-                    if ($LASTEXITCODE -eq 0) {
-                        $status = "Synced"
-                        $color = "#4CAF50"
-                        Log-Msg "   [RES] SUCCESS"
-                    }
-                    else {
-                        $status = "Error"
-                        $color = "#FF5252"
-                        Log-Msg "   [RES] GIT EXIT CODE $LASTEXITCODE"
-                    }
-                }
-                catch {
-                    $status = "Error"
-                    Log-Msg "   [ERR] EXCEPTION: $_"
-                }
-                finally {
-                    Pop-Location
-                }
-            }
-            else {
-                Log-Msg "   [ERR] PATH NOT FOUND"
-            }
-            
-            $queue.Enqueue(@{ Type = "Result"; Path = $path; Status = $status; Color = $color })
-        }
-        Log-Msg "======================================================="
-        Log-Msg "SYNC JOB COMPLETED"
-        Log-Msg "======================================================="
-    }
-
-    # Start Runspace
-    $Script:SyncRunspace = [PowerShell]::Create().AddScript($syncBlock).AddArgument($repoPaths).AddArgument($Script:SyncQueue).AddArgument($Script:CurrentLogFile)
-    $Script:SyncRunspace.BeginInvoke()
-
-    # Start UI Timer to poll results
-    if ($null -eq $Script:SyncTimer) {
-        $Script:SyncTimer = New-Object System.Windows.Threading.DispatcherTimer
-        $Script:SyncTimer.Interval = [TimeSpan]::FromMilliseconds(100)
-        $Script:SyncTimer.Add_Tick({
-                Process-SyncQueue
-            })
-    }
-    $Script:SyncTimer.Start()
-}
-
-Function Process-SyncQueue {
-    while ($Script:SyncQueue.Count -gt 0) {
-        $msg = $Script:SyncQueue.Dequeue()
-        
-        $repo = $Script:AllRepos | Where-Object { $_.Path -eq $msg.Path } | Select-Object -First 1
-        
-        if ($msg.Type -eq "Progress") {
-            if ($repo) {
-                $repo.Status = "Syncing..."
-                $repo.StatusColor = "#00BCD4"
-            }
-            $percent = [math]::Round(($msg.Index / $msg.Total) * 100)
-            $SyncProgressBar.Value = $percent
-
-            Update-Status "Syncing [$($msg.Index)/$($msg.Total)]: $($msg.Path | Split-Path -Leaf)"
-            $RepoList.Items.Refresh()
-        }
-        elseif ($msg.Type -eq "Log") {
-            $LogTextBox.AppendText($msg.Msg + "`r`n")
-            $LogScroll.ScrollToEnd()
-        }
-        elseif ($msg.Type -eq "Result") {
-            if ($repo) {
-                $repo.Status = $msg.Status
-                $repo.StatusColor = $msg.Color
-                if ($msg.Status -eq "Synced") {
-                    $repo.LastSync = Get-Date
-                }
-            }
-            $RepoList.Items.Refresh()
-            Update-Statistics
-        }
-    }
-
-    # Check if finished
-    if ($Script:SyncRunspace -and $Script:SyncRunspace.InvocationStateInfo.State -ne "Running") {
-        $Script:SyncTimer.Stop()
-        $Script:SyncRunspace.Dispose()
-        $Script:SyncRunspace = $null
-        
-        $BtnSyncAll.IsEnabled = $true
-        $BtnScan.IsEnabled = $true
-        $BtnRefresh.IsEnabled = $true
-        $SyncProgressBar.Value = 100
-        Update-Status "Sync Completed!"
-        $RepoList.Items.Refresh()
-        
-        # Refresh all statuses after sync
-        Log-Message "Refreshing repository status after sync..."
-        Start-BackgroundStatusCheck
-    }
-}
-
-Function Scan-Repositories {
-    if ([string]::IsNullOrWhiteSpace($Script:SelectedFolder)) {
-        Update-Status "Please select a folder first!"
-        return
-    }
-
-    $Script:AllRepos.Clear()
-    $Script:FilteredRepos.Clear()
-    $TxtCountFound.Text = "0"
-    Update-Status "Scanning for .git folders (Background)..."
-    
-    $Script:ScanQueue.Clear()
-    
-    # Background Scan ScriptBlock
-    $scanBlock = {
-        param($path, $queue)
-        
-        try {
-            # Use pipeline to stream results immediately instead of collecting all first
-            Get-ChildItem -Path $path -Directory -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
-                $gitPath = Join-Path $_.FullName ".git"
-                if (Test-Path $gitPath) {
-                    $repoInfo = @{
-                        Name = $_.Name
-                        Path = $_.FullName
-                    }
-                    $queue.Enqueue($repoInfo)
-                }
-            }
-        }
-        catch {
-            $queue.Enqueue(@{ Error = $_.Message })
-        }
-    }
-    
-    # Start Scan Runspace
-    $Script:ScanRunspace = [PowerShell]::Create().AddScript($scanBlock).AddArgument($Script:SelectedFolder).AddArgument($Script:ScanQueue)
-    $Script:ScanRunspace.BeginInvoke()
-    
-    # Initialize Status Pool IMMEDIATELY
-    Initialize-StatusPool
-    
-    # Start Timer
-    if ($null -eq $Script:ScanTimer) {
-        $Script:ScanTimer = New-Object System.Windows.Threading.DispatcherTimer
-        $Script:ScanTimer.Interval = [TimeSpan]::FromMilliseconds(50)
-        $Script:ScanTimer.Add_Tick({ Process-ScanQueue })
-    }
-    $Script:ScanTimer.Start()
-}
-
-Function Process-ScanQueue {
-    while ($Script:ScanQueue.Count -gt 0) {
-        $item = $Script:ScanQueue.Dequeue()
-        
-        if ($item.Error) {
-            Log-Message "Scan Error: $($item.Error)"
-        }
-        else {
-            $repoObj = [PSCustomObject]@{
-                Name           = $item.Name
-                Path           = $item.Path
-                Branch         = "..."
-                Status         = "Pending"
-                StatusColor    = "#757575"
-                DetailedStatus = "Waiting for check..."
-                IsDirty        = $false
-                Ahead          = 0
-                Behind         = 0
-                LastSync       = $null
-            }
-            
-            $Script:AllRepos.Add($repoObj)
-            $Script:FilteredRepos.Add($repoObj)
-            $TxtCountFound.Text = $Script:AllRepos.Count.ToString()
-            
-            # Log discovery
-            Log-Message "Found: $($item.Name) ($($item.Path))"
-            
-            # SUBMIT JOB IMMEDIATELY
-            Submit-StatusJob $repoObj.Path
-        }
-    }
-
-    # Check saturation
-    [System.Windows.Forms.Application]::DoEvents()
-
-    # Check completion
-    if ($Script:ScanRunspace -and $Script:ScanRunspace.InvocationStateInfo.State -ne "Running") {
-        $Script:ScanTimer.Stop()
-        $Script:ScanRunspace.Dispose()
-        $Script:ScanRunspace = $null
-        
-        Update-Status "Scan Complete. Found $($Script:AllRepos.Count) repositories."
-        Log-Message "Scan Complete: Found $($Script:AllRepos.Count) repositories"
-    }
-}
-
-Function Initialize-StatusPool {
-    # Initialize RunspacePool if needed
-    # (Session state not required as we embed function in scriptblock for isolation)
-
-    # Clean up any existing pool
-    if ($Script:StatusRunspacePool) {
-        $Script:StatusRunspacePool.Dispose()
-    }
-
-    # Create new Pool with throttle limit
-    $Script:StatusRunspacePool = [runspacefactory]::CreateRunspacePool(1, [Environment]::ProcessorCount * 2)
-    $Script:StatusRunspacePool.Open()
-    
-    $Script:StatusResultQueue.Clear()
-    $Script:StatusPool.Clear()
-
-    # Start Timer
-    if ($null -eq $Script:StatusTimer) {
-        $Script:StatusTimer = New-Object System.Windows.Threading.DispatcherTimer
-        $Script:StatusTimer.Interval = [TimeSpan]::FromMilliseconds(50)
-        $Script:StatusTimer.Add_Tick({ Process-StatusQueue })
-    }
-    $Script:StatusTimer.Start()
-}
-
-Function Submit-StatusJob($repoPath) {
-    # Define the worker script block - uses dedicated git commands for reliability
-    $workerScript = {
-        param($repoPath, $queue)
-        
-        function Get-StatusLocal ($path) {
-            $res = @{ 
-                Branch         = "unknown"
-                IsDirty        = $false
-                Ahead          = 0
-                Behind         = 0
-                Status         = "Clean"
-                StatusColor    = "#4CAF50"
-                DetailedStatus = "Up to date"
-            }
-            
+$menuSync = New-Object System.Windows.Controls.MenuItem
+$menuSync.Header = "Sync This Repository"
+$menuSync.Add_Click({
+        $selected = $RepoList.SelectedItem
+        if ($selected) {
+            $selected.Status = "Syncing..."; $selected.StatusColor = "#00BCD4"; $RepoList.Items.Refresh()
+            Push-Location $selected.Path
             try {
-                Push-Location $path
-                
-                # 1. Get Branch Name (most reliable method)
-                $branch = git rev-parse --abbrev-ref HEAD 2>&1
-                if ($LASTEXITCODE -eq 0 -and $branch) {
-                    $res.Branch = $branch.Trim()
-                }
-                
-                # 2. Check for dirty working directory
-                $dirtyCheck = @(git status --porcelain 2>&1)
-                if ($dirtyCheck.Count -gt 0 -and $dirtyCheck[0] -notmatch '^fatal:') {
-                    $res.IsDirty = $true
-                }
-                
-                # 3. Check ahead/behind (requires upstream tracking branch)
-                $upstream = git rev-parse --abbrev-ref "@{u}" 2>&1
-                if ($LASTEXITCODE -eq 0) {
-                    # Has upstream, get counts
-                    $ahead = git rev-list --count "@{u}..HEAD" 2>&1
-                    if ($LASTEXITCODE -eq 0) { $res.Ahead = [int]$ahead }
-                    
-                    $behind = git rev-list --count "HEAD..@{u}" 2>&1
-                    if ($LASTEXITCODE -eq 0) { $res.Behind = [int]$behind }
-                }
-                
-                # 4. Determine status based on collected data
-                if ($res.IsDirty) {
-                    $res.Status = "Dirty"
-                    $res.StatusColor = "#FFC107"
-                    $res.DetailedStatus = "Uncommitted changes"
-                }
-                elseif ($res.Ahead -gt 0 -and $res.Behind -gt 0) {
-                    $res.Status = "Diverged"
-                    $res.StatusColor = "#9C27B0"
-                    $res.DetailedStatus = "Ahead $($res.Ahead), Behind $($res.Behind)"
-                }
-                elseif ($res.Ahead -gt 0) {
-                    $res.Status = "Ahead"
-                    $res.StatusColor = "#2196F3"
-                    $res.DetailedStatus = "Ahead $($res.Ahead) commits"
-                }
-                elseif ($res.Behind -gt 0) {
-                    $res.Status = "Behind"
-                    $res.StatusColor = "#FF9800"
-                    $res.DetailedStatus = "Behind $($res.Behind) commits"
-                }
-                
-                return $res
+                $env:GIT_REDIRECT_STDERR_TO_STDOUT = "1"
+                Write-Log "Syncing: $($selected.Name)"
+                git fetch --all 2>&1 | ForEach-Object { Write-Log "  $_" }
+                git pull 2>&1 | ForEach-Object { Write-Log "  $_" }
+                if ($LASTEXITCODE -eq 0) { $selected.Status = "Synced"; $selected.StatusColor = "#4CAF50"; Write-Log "  SUCCESS" }
+                else { $selected.Status = "Error"; $selected.StatusColor = "#FF5252"; Write-Log "  Exit code: $LASTEXITCODE" }
             }
-            catch {
-                return @{ 
-                    Branch         = "error"
-                    Status         = "Error"
-                    StatusColor    = "#FF5252"
-                    DetailedStatus = "Check Failed: $_"
-                    IsDirty        = $false
-                    Ahead          = 0
-                    Behind         = 0
-                }
-            }
-            finally { Pop-Location }
+            catch { $selected.Status = "Error"; $selected.StatusColor = "#FF5252"; Write-Log "  Error: $_" }
+            finally { Pop-Location; $RepoList.Items.Refresh(); Update-Statistics }
         }
+    })
 
-        $result = Get-StatusLocal $repoPath
-        $result.Path = $repoPath
-        $queue.Enqueue($result)
-    }
+$menuRefresh = New-Object System.Windows.Controls.MenuItem
+$menuRefresh.Header = "Refresh Status"
+$menuRefresh.Add_Click({
+        $selected = $RepoList.SelectedItem
+        if ($selected) { Initialize-RunspacePool; Start-MainTimer; Submit-StatusJob $selected.Path }
+    })
 
-    if ($Script:StatusRunspacePool -and $Script:StatusRunspacePool.RunspacePoolStateInfo.State -eq "Opened") {
-        $ps = [PowerShell]::Create()
-        $ps.RunspacePool = $Script:StatusRunspacePool
-        [void]$ps.AddScript($workerScript).AddArgument($repoPath).AddArgument($Script:StatusResultQueue)
-        
-        [void]$ps.BeginInvoke()
-        $Script:StatusPool.Add($ps)
-    }
-}
+$menuExplorer = New-Object System.Windows.Controls.MenuItem
+$menuExplorer.Header = "Open in Explorer"
+$menuExplorer.Add_Click({ $selected = $RepoList.SelectedItem; if ($selected -and (Test-Path $selected.Path)) { Start-Process "explorer.exe" $selected.Path } })
 
-Function Start-BackgroundStatusCheck {
-    # Async parallel status checker
-    if ($Script:AllRepos.Count -eq 0) { return }
-    
-    Update-Status "Checking repository status (Parallel)..."
-    Initialize-StatusPool
-    
-    # Create snapshot to prevent "Collection was modified" error during enumeration
-    $repoSnapshot = @($Script:AllRepos | ForEach-Object { $_.Path })
-    
-    foreach ($path in $repoSnapshot) {
-        Submit-StatusJob $path
-    }
-}
+$menuCopy = New-Object System.Windows.Controls.MenuItem
+$menuCopy.Header = "Copy Path"
+$menuCopy.Add_Click({ $selected = $RepoList.SelectedItem; if ($selected) { Set-Clipboard $selected.Path; Update-Status "Path copied" } })
 
-Function Process-StatusQueue {
-    # Process up to 20 items per tick to keep UI responsive but fast
-    $processed = 0
-    while ($Script:StatusResultQueue.Count -gt 0 -and $processed -lt 20) {
-        $res = $Script:StatusResultQueue.Dequeue()
-        $processed++
-        
-        # Find repo object
-        $repo = $Script:AllRepos | Where-Object { $_.Path -eq $res.Path } | Select-Object -First 1
-        
-        if ($repo) {
-            $repo.Branch = $res.Branch
-            $repo.Status = $res.Status
-            $repo.StatusColor = $res.StatusColor
-            $repo.DetailedStatus = $res.DetailedStatus
-            $repo.IsDirty = $res.IsDirty
-            $repo.Ahead = $res.Ahead
-            $repo.Behind = $res.Behind
-            
-            # Log status result
-            Log-Message "Status: $($repo.Name) [$($res.Branch)] - $($res.Status) ($($res.DetailedStatus))"
-        }
-    }
-    
-    if ($processed -gt 0) {
-        $RepoList.Items.Refresh()
-        Update-Statistics
-    }
+$Script:RepoContextMenu.Items.Add($menuSync)
+$Script:RepoContextMenu.Items.Add($menuRefresh)
+$Script:RepoContextMenu.Items.Add((New-Object System.Windows.Controls.Separator))
+$Script:RepoContextMenu.Items.Add($menuExplorer)
+$Script:RepoContextMenu.Items.Add($menuCopy)
+$RepoList.ContextMenu = $Script:RepoContextMenu
+#endregion
 
-    # Check if all jobs done
-    $running = $false
-    foreach ($ps in $Script:StatusPool) {
-        if ($ps.InvocationStateInfo.State -eq "Running" -or $ps.InvocationStateInfo.State -eq "NotStarted") {
-            $running = $true
-            break
-        }
-    }
-    
-    if (-not $running -and $Script:StatusResultQueue.Count -eq 0) {
-        $Script:StatusTimer.Stop()
-        $Script:StatusPool.Clear() # Dispose handles if needed
-        Update-Status "Status Check Complete"
-        Log-Message "Status refresh complete"
-    }
-}
+#region Event_Handlers
+# Window chrome
+$TitleBarArea.Add_MouseLeftButtonDown({ param($s, $e) $window.DragMove() })
+$MinimizeButton.Add_Click({ $window.WindowState = "Minimized" })
+$CloseButton.Add_Click({ $window.Close() })
 
-# --------------------------------------------------
-# Event Handlers
-# --------------------------------------------------
+# Main actions
 $BtnSelectFolder.Add_Click({
         $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
         $dialog.Description = "Select Parent Folder containing Git Repos"
-    
         if ($dialog.ShowDialog() -eq "OK") {
             $Script:SelectedFolder = $dialog.SelectedPath
             $TxtCurrentPath.Text = $Script:SelectedFolder
             Update-Status "Folder Selected: $($Script:SelectedFolder)"
-            Log-Message "Selected folder: $($Script:SelectedFolder)"
+            Write-Log "Selected folder: $($Script:SelectedFolder)"
+            Add-RecentFolder $Script:SelectedFolder
+            Update-RecentList
         }
     })
 
-$BtnScan.Add_Click({
-        Scan-Repositories
-    })
+$BtnScan.Add_Click({ Scan-Repositories })
+$BtnRefresh.Add_Click({ Start-BackgroundStatusCheck })
+$BtnSyncAll.Add_Click({ Sync-Repositories })
 
-$BtnRefresh.Add_Click({
-        Refresh-AllRepoStatus
-    })
-
-$BtnSyncAll.Add_Click({
-        Sync-Repositories
-    })
-
+# Log controls
 $BtnToggleLog.Add_Click({
-        if ($LogOverlay.Visibility -eq "Visible") {
-            $LogOverlay.Visibility = "Collapsed"
-            $BtnToggleLog.Content = "Show Log"
-        }
-        else {
-            $LogOverlay.Visibility = "Visible"
-            $BtnToggleLog.Content = "Hide Log"
-        }
+        if ($LogOverlay.Visibility -eq "Visible") { $LogOverlay.Visibility = "Collapsed"; $BtnToggleLog.Content = "Show Log" }
+        else { $LogOverlay.Visibility = "Visible"; $BtnToggleLog.Content = "Hide Log" }
     })
+$BtnCloseLog.Add_Click({ $LogOverlay.Visibility = "Collapsed"; $BtnToggleLog.Content = "Show Log" })
+$BtnClearLog.Add_Click({ $LogTextBox.Clear() })
 
-$BtnCloseLog.Add_Click({
-        $LogOverlay.Visibility = "Collapsed"
-        $BtnToggleLog.Content = "Show Log"
-    })
+# Filter/Sort
+$TxtSearch.Add_TextChanged({ Apply-Filter })
+$TxtSearch.Add_GotFocus({ $TxtSearchHelper.Visibility = "Collapsed" })
+$TxtSearch.Add_LostFocus({ if ([string]::IsNullOrWhiteSpace($TxtSearch.Text)) { $TxtSearchHelper.Visibility = "Visible" } })
+$CmbStatusFilter.Add_SelectionChanged({ Apply-Filter })
+$CmbSortBy.Add_SelectionChanged({ Apply-Sort })
 
-$BtnClearLog.Add_Click({
-        $LogTextBox.Clear()
-    })
-
-$TxtSearch.Add_TextChanged({
-        Apply-Filter
-    })
-
-$TxtSearch.Add_GotFocus({
-        $TxtSearchHelper.Visibility = "Collapsed"
-    })
-
-$TxtSearch.Add_LostFocus({
-        if ([string]::IsNullOrWhiteSpace($TxtSearch.Text)) {
-            $TxtSearchHelper.Visibility = "Visible"
+# Recent folders
+$RecentList.Add_SelectionChanged({
+        $sel = $RecentList.SelectedItem
+        if ($sel -and $sel.Tag) {
+            $Script:SelectedFolder = $sel.Tag
+            $TxtCurrentPath.Text = $Script:SelectedFolder
+            Update-Status "Folder Selected: $($Script:SelectedFolder)"
+            Scan-Repositories
         }
     })
 
-$CmbStatusFilter.Add_SelectionChanged({
-        Apply-Filter
-    })
-
-$CmbSortBy.Add_SelectionChanged({
-        Apply-Sort
-    })
-
+# Export & Settings
 $BtnExportLogs.Add_Click({
-        if ($Script:CurrentLogFile -and (Test-Path $Script:CurrentLogFile)) {
-            Start-Process "explorer.exe" "/select,`"$($Script:CurrentLogFile)`""
-            Update-Status "Log file location opened"
-        }
-        else {
-            [System.Windows.MessageBox]::Show("No log file available yet. Please run a sync operation first.", "Export Logs", "OK", "Information")
-        }
+        if ($Script:CurrentLogFile -and (Test-Path $Script:CurrentLogFile)) { Start-Process "explorer.exe" "/select,`"$($Script:CurrentLogFile)`"" }
+        else { [System.Windows.MessageBox]::Show("No log file available yet.", "Export Logs", "OK", "Information") }
     })
 
 $BtnSettings.Add_Click({
-        [System.Windows.MessageBox]::Show("Settings panel coming soon!", "Settings", "OK", "Information")
+        $TxtMaxParallel.Text = $Script:Settings.MaxParallel.ToString()
+        $TxtLogRetention.Text = $Script:Settings.LogRetentionDays.ToString()
+        $TxtRecentCount.Text = $Script:Settings.RecentFoldersCount.ToString()
+        $SettingsOverlay.Visibility = "Visible"
     })
 
-# --------------------------------------------------
-# Launch
-# --------------------------------------------------
-Update-Status "Ready - Welcome to SuperGit Tools v2.0"
-Log-Message "Application started"
+$BtnSettingsCancel.Add_Click({ $SettingsOverlay.Visibility = "Collapsed" })
+$BtnSettingsSave.Add_Click({
+        try {
+            $Script:Settings.MaxParallel = [int]$TxtMaxParallel.Text
+            $Script:Settings.LogRetentionDays = [int]$TxtLogRetention.Text
+            $Script:Settings.RecentFoldersCount = [int]$TxtRecentCount.Text
+            Save-Settings
+            Update-Status "Settings saved"
+        }
+        catch { Update-Status "Invalid settings value" }
+        $SettingsOverlay.Visibility = "Collapsed"
+    })
+
+# Keyboard shortcuts
+$window.Add_KeyDown({
+        param($s, $e)
+        if ($e.Key -eq "F" -and $e.KeyboardDevice.Modifiers -eq "Control") { $TxtSearch.Focus(); $e.Handled = $true }
+        elseif (($e.Key -eq "R" -and $e.KeyboardDevice.Modifiers -eq "Control") -or $e.Key -eq "F5") { Start-BackgroundStatusCheck; $e.Handled = $true }
+        elseif ($e.Key -eq "S" -and $e.KeyboardDevice.Modifiers -eq "Control") { if ($BtnSyncAll.IsEnabled) { Sync-Repositories }; $e.Handled = $true }
+    })
+#endregion
+
+#region Main_Entry
+Update-Status "Ready - Welcome to SuperGit Tools v3.0"
+Write-Log "Application started"
+Update-RecentList
 $window.ShowDialog() | Out-Null
+#endregion
