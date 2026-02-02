@@ -733,6 +733,17 @@ $Script:SyncRunspace = $null
 $Script:SyncQueue = [System.Collections.Queue]::Synchronized([System.Collections.Queue]::new())
 $Script:CurrentLogFile = $null
 
+# Async Scanning Logic
+$Script:ScanTimer = $null
+$Script:ScanRunspace = $null
+$Script:ScanQueue = [System.Collections.Queue]::Synchronized([System.Collections.Queue]::new())
+
+# Async Status Logic
+$Script:StatusTimer = $null
+$Script:StatusRunspacePool = $null
+$Script:StatusResultQueue = [System.Collections.Queue]::Synchronized([System.Collections.Queue]::new())
+$Script:StatusPool = [System.Collections.Generic.List[PSObject]]::new() # Keep track of running pipelines
+
 Function Sync-SingleRepository($repoObj) {
     Update-Status "Syncing $($repoObj.Name)..."
     Log-Message "Starting sync for: $($repoObj.Name)"
@@ -946,6 +957,239 @@ Function Process-SyncQueue {
         # Refresh all statuses after sync
         Log-Message "Refreshing repository status after sync..."
         Start-BackgroundStatusCheck
+    }
+}
+
+Function Scan-Repositories {
+    if ([string]::IsNullOrWhiteSpace($Script:SelectedFolder)) {
+        Update-Status "Please select a folder first!"
+        return
+    }
+
+    $Script:AllRepos.Clear()
+    $Script:FilteredRepos.Clear()
+    $TxtCountFound.Text = "0"
+    Update-Status "Scanning for .git folders (Background)..."
+    
+    $Script:ScanQueue.Clear()
+    
+    # Background Scan ScriptBlock
+    $scanBlock = {
+        param($path, $queue)
+        
+        try {
+            # Use pipeline to stream results immediately instead of collecting all first
+            Get-ChildItem -Path $path -Directory -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+                $gitPath = Join-Path $_.FullName ".git"
+                if (Test-Path $gitPath) {
+                    $repoInfo = @{
+                        Name = $_.Name
+                        Path = $_.FullName
+                    }
+                    $queue.Enqueue($repoInfo)
+                }
+            }
+        }
+        catch {
+            $queue.Enqueue(@{ Error = $_.Message })
+        }
+    }
+    
+    # Start Scan Runspace
+    $Script:ScanRunspace = [PowerShell]::Create().AddScript($scanBlock).AddArgument($Script:SelectedFolder).AddArgument($Script:ScanQueue)
+    $Script:ScanRunspace.BeginInvoke()
+    
+    # Initialize Status Pool IMMEDIATELY
+    Initialize-StatusPool
+    
+    # Start Timer
+    if ($null -eq $Script:ScanTimer) {
+        $Script:ScanTimer = New-Object System.Windows.Threading.DispatcherTimer
+        $Script:ScanTimer.Interval = [TimeSpan]::FromMilliseconds(50)
+        $Script:ScanTimer.Add_Tick({ Process-ScanQueue })
+    }
+    $Script:ScanTimer.Start()
+}
+
+Function Process-ScanQueue {
+    while ($Script:ScanQueue.Count -gt 0) {
+        $item = $Script:ScanQueue.Dequeue()
+        
+        if ($item.Error) {
+            Log-Message "Scan Error: $($item.Error)"
+        }
+        else {
+            $repoObj = [PSCustomObject]@{
+                Name           = $item.Name
+                Path           = $item.Path
+                Branch         = "..."
+                Status         = "Pending"
+                StatusColor    = "#757575"
+                DetailedStatus = "Waiting for check..."
+                IsDirty        = $false
+                Ahead          = 0
+                Behind         = 0
+                LastSync       = $null
+            }
+            
+            $Script:AllRepos.Add($repoObj)
+            $Script:FilteredRepos.Add($repoObj)
+            $TxtCountFound.Text = $Script:AllRepos.Count.ToString()
+            
+            # SUBMIT JOB IMMEDIATELY
+            Submit-StatusJob $repoObj.Path
+        }
+    }
+
+    # Check saturation
+    [System.Windows.Forms.Application]::DoEvents()
+
+    # Check completion
+    if ($Script:ScanRunspace -and $Script:ScanRunspace.InvocationStateInfo.State -ne "Running") {
+        $Script:ScanTimer.Stop()
+        $Script:ScanRunspace.Dispose()
+        $Script:ScanRunspace = $null
+        
+        Update-Status "Scan Complete. Found $($Script:AllRepos.Count) repositories."
+        Log-Message "Scan Complete: Found $($Script:AllRepos.Count) repositories"
+    }
+}
+
+Function Initialize-StatusPool {
+    # Initialize RunspacePool if needed
+    # (Session state not required as we embed function in scriptblock for isolation)
+
+    # Clean up any existing pool
+    if ($Script:StatusRunspacePool) {
+        $Script:StatusRunspacePool.Dispose()
+    }
+
+    # Create new Pool with throttle limit
+    $Script:StatusRunspacePool = [runspacefactory]::CreateRunspacePool(1, [Environment]::ProcessorCount * 2)
+    $Script:StatusRunspacePool.Open()
+    
+    $Script:StatusResultQueue.Clear()
+    $Script:StatusPool.Clear()
+
+    # Start Timer
+    if ($null -eq $Script:StatusTimer) {
+        $Script:StatusTimer = New-Object System.Windows.Threading.DispatcherTimer
+        $Script:StatusTimer.Interval = [TimeSpan]::FromMilliseconds(50)
+        $Script:StatusTimer.Add_Tick({ Process-StatusQueue })
+    }
+    $Script:StatusTimer.Start()
+}
+
+Function Submit-StatusJob($repoPath) {
+    # Define the worker script block - needs Get-GitStatus logic self-contained
+    $workerScript = {
+        param($repoPath, $queue)
+        
+        # Embedded simplified Get-GitStatus to ensure isolation
+        function Get-StatusLocal ($path) {
+            try {
+                Push-Location $path
+                $env:GIT_REDIRECT_STDERR_TO_STDOUT = "1"
+                $status = git status --porcelain -b 2>&1
+                
+                $res = @{ Branch = "unknown"; IsDirty = $false; Ahead = 0; Behind = 0; Status = "Clean"; StatusColor = "#4CAF50"; DetailedStatus = "" }
+                
+                if ($status) {
+                    $branchLine = $status[0]
+                    if ($branchLine -match '## (.+?)\.\.\.') { $res.Branch = $matches[1] }
+                    elseif ($branchLine -match '## (.+)$') { $res.Branch = $matches[1] }
+                    
+                    if ($branchLine -match '\[ahead (\d+)\]') { $res.Ahead = [int]$matches[1] }
+                    if ($branchLine -match '\[behind (\d+)\]') { $res.Behind = [int]$matches[1] }
+                    if ($branchLine -match '\[ahead (\d+), behind (\d+)\]') { $res.Ahead = [int]$matches[1]; $res.Behind = [int]$matches[2] }
+                    
+                    if ($status.Count -gt 1) { $res.IsDirty = $true }
+                    
+                    if ($res.IsDirty) {
+                        $res.Status = "Dirty"; $res.StatusColor = "#FFC107"; $res.DetailedStatus = "Uncommitted changes"
+                    }
+                    elseif ($res.Ahead -gt 0 -and $res.Behind -gt 0) {
+                        $res.Status = "Diverged"; $res.StatusColor = "#9C27B0"; $res.DetailedStatus = "Ahead $($res.Ahead), Behind $($res.Behind)"
+                    }
+                    elseif ($res.Ahead -gt 0) {
+                        $res.Status = "Ahead"; $res.StatusColor = "#2196F3"; $res.DetailedStatus = "Ahead $($res.Ahead)"
+                    }
+                    elseif ($res.Behind -gt 0) {
+                        $res.Status = "Behind"; $res.StatusColor = "#FF9800"; $res.DetailedStatus = "Behind $($res.Behind)"
+                    }
+                }
+                return $res
+            }
+            catch { return @{ Status = "Error"; StatusColor = "#FF5252"; DetailedStatus = "Check Failed" } }
+            finally { Pop-Location }
+        }
+
+        $result = Get-StatusLocal $repoPath
+        $result.Path = $repoPath # Add path to identify it back in UI
+        $queue.Enqueue($result)
+    }
+
+    if ($Script:StatusRunspacePool -and $Script:StatusRunspacePool.RunspacePoolStateInfo.State -eq "Opened") {
+        $ps = [PowerShell]::Create()
+        $ps.RunspacePool = $Script:StatusRunspacePool
+        [void]$ps.AddScript($workerScript).AddArgument($repoPath).AddArgument($Script:StatusResultQueue)
+        
+        [void]$ps.BeginInvoke()
+        $Script:StatusPool.Add($ps)
+    }
+}
+
+Function Start-BackgroundStatusCheck {
+    # Legacy wrapper or bulk starter
+    if ($Script:AllRepos.Count -eq 0) { return }
+    
+    Update-Status "Checking repository status (Parallel)..."
+    Initialize-StatusPool
+    
+    foreach ($repo in $Script:AllRepos) {
+        Submit-StatusJob $repo.Path
+    }
+}
+
+Function Process-StatusQueue {
+    # Process up to 20 items per tick to keep UI responsive but fast
+    $processed = 0
+    while ($Script:StatusResultQueue.Count -gt 0 -and $processed -lt 20) {
+        $res = $Script:StatusResultQueue.Dequeue()
+        $processed++
+        
+        # Find repo object
+        $repo = $Script:AllRepos | Where-Object { $_.Path -eq $res.Path } | Select-Object -First 1
+        
+        if ($repo) {
+            $repo.Branch = $res.Branch
+            $repo.Status = $res.Status
+            $repo.StatusColor = $res.StatusColor
+            $repo.DetailedStatus = $res.DetailedStatus
+            $repo.IsDirty = $res.IsDirty
+            $repo.Ahead = $res.Ahead
+            $repo.Behind = $res.Behind
+        }
+    }
+    
+    if ($processed -gt 0) {
+        $RepoList.Items.Refresh()
+        Update-Statistics
+    }
+
+    # Check if all jobs done
+    $running = $false
+    foreach ($ps in $Script:StatusPool) {
+        if ($ps.InvocationStateInfo.State -eq "Running" -or $ps.InvocationStateInfo.State -eq "NotStarted") {
+            $running = $true
+            break
+        }
+    }
+    
+    if (-not $running -and $Script:StatusResultQueue.Count -eq 0) {
+        $Script:StatusTimer.Stop()
+        $Script:StatusPool.Clear() # Dispose handles if needed
+        Update-Status "Status Check Complete"
     }
 }
 
