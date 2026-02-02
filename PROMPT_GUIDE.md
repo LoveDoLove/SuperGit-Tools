@@ -50,7 +50,17 @@ Any UI/UX development (especially for `git-sync-gui.ps1` or web dashboards) must
     - **Theme:** Light mode with Gradients.
     - **Layout:** Use `Grid` and `DockPanel` for structure. Use `DataTemplate` in `ListBox` for Card views.
     - **Feedback:** Use `ProgressBar` for long-running operations.
-  - **Async:** Use **Runspaces** or `[System.Windows.Threading.Dispatcher]` to keep the UI responsive during Git operations.
+  - **Async:** Use **RunspacePool** for parallel operations across multiple repositories. Single **Runspace** for one-off background tasks.
+  - **Git Commands:** Use dedicated commands for reliability (avoid parsing `--porcelain -b` headers):
+    - Branch: `git rev-parse --abbrev-ref HEAD`
+    - Dirty: `git status --porcelain` (any output = dirty)
+    - Ahead: `git rev-list --count @{u}..HEAD`
+    - Behind: `git rev-list --count HEAD..@{u}`
+  - **Collection Safety:** Always create a snapshot copy of collections before enumerating in async contexts:
+    ```powershell
+    $snapshot = @($Script:AllRepos | ForEach-Object { $_.Path })
+    foreach ($path in $snapshot) { ... }
+    ```
 
 ### 3. Feature Requirements (Must-Have)
 
@@ -96,8 +106,28 @@ When updating or fixing the app, ensure these core features remain intact:
 - **Recent Folders:** Add quick access to recently used parent folders.
 - **Repository Details Panel:** Sliding panel with detailed repo information and recent commits.
 - **Scheduled Sync:** Background auto-sync at configurable intervals.
-- **Multi-threading Optimization:** Parallel status checking for large repository counts.
+- ~~**Multi-threading Optimization:** Parallel status checking for large repository counts.~~ ✅ **DONE (v2.1)**
 - **Advanced Git Features:**
   - Branch switching
   - Stash management
   - Conflict resolution helpers
+
+## Lessons Learned (Session History)
+
+### Threading & Async
+
+1. **Collection Modified Exception:** When iterating over `ObservableCollection` or similar, always snapshot first if background threads may modify it.
+2. **RunspacePool Throttling:** Use `[Environment]::ProcessorCount * 2` as a sensible thread limit.
+3. **Queue Polling:** Use `DispatcherTimer` with 50ms interval to poll synchronized queues for UI updates.
+
+### Git Command Reliability
+
+1. **Avoid parsing `git status --porcelain -b` header** for branch names - it varies by git version and config.
+2. **Use dedicated commands:** `git rev-parse` is far more reliable than regex parsing.
+3. **Array Context:** Always wrap git output in `@(...)` to force array context for consistent indexing.
+
+### PowerShell GUI Best Practices
+
+1. **Double Null Checks:** Always check both `$Control` and `$Control.Property` before assignment.
+2. **No Emojis:** Avoid all emoji characters to prevent encoding issues in PowerShell 5.1.
+3. **Runspace Isolation:** Functions used inside Runspaces must be self-contained (no external references).

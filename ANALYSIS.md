@@ -65,10 +65,12 @@
     - **File Log:** Mirrors real-time log to `yyyy-MM-dd-<ParentFolder>.log`.
     - **Log Export:** Quick access to log file location.
 - **Architecture:**
-  - **Async/Threading:** Uses `Runspace` for background Git operations to prevent UI freezing.
-  - **Communication:** `Synchronized Queue` used to pass messages (Progress, Log, Result) from background thread to UI thread.
-  - **Dispatcher:** `DispatcherTimer` polls the queue to update UI elements safely.
+  - **Multi-Threading:** Uses `RunspacePool` for parallel Git operations across multiple repositories.
+  - **Async Scanning:** Repository discovery runs in background `Runspace`, streaming results to UI in real-time.
+  - **Communication:** `Synchronized Queue` used to pass messages (Progress, Log, Result) from background threads to UI thread.
+  - **Dispatcher:** `DispatcherTimer` polls queues to update UI elements safely (50ms interval).
   - **Virtualization:** Enabled for repository list to handle large numbers of repositories efficiently.
+  - **Collection Safety:** Uses snapshot copies of collections before enumeration to prevent "Collection was modified" errors.
 
 ## 5. Design System: Friendly Horizon v2.0 (Light Theme)
 
@@ -136,6 +138,18 @@
     - Git installation validation
   - **Technical:**
     - **Robust Error Handling:** Comprehensive `try-catch` blocks with double null checks for UI controls.
+    - **Multi-threaded Git Commands:** Uses dedicated git commands for reliability:
+      - `git rev-parse --abbrev-ref HEAD` for branch detection
+      - `git status --porcelain` for dirty check
+      - `git rev-list --count @{u}..HEAD` / `HEAD..@{u}` for ahead/behind
     - Codebase uses strict text-only UI elements (no emojis) for compatibility.
     - Logging coverage captures all command output and progress steps.
     - Settings panel placeholder for future customization
+
+## 7. Performance Optimization (v2.1)
+
+- **RunspacePool:** Parallel status checking with throttle limit (`ProcessorCount * 2`).
+- **Streaming Scan:** Repositories appear in UI immediately as discovered (pipeline-based).
+- **Concurrent Processing:** Status checks submitted as each repo is found, not after scan completes.
+- **Snapshot Enumeration:** Collections copied before iteration to prevent threading errors.
+- **Throttled UI Updates:** Process max 20 queue items per timer tick to maintain responsiveness.
