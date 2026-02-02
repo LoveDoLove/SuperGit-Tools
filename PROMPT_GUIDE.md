@@ -4,9 +4,9 @@
 
 - **App Name:** SuperGit-Tools
 - **CLI Tool:** `git-sync.ps1` v1.0 (Automation focused, interactive CLI)
-- **GUI Tool:** `git-sync-gui.ps1` v2.0 (Visual interface, "Friendly Horizon" design, WPF/XAML)
+- **GUI Tool:** `git-sync-gui.ps1` v3.0 (Visual interface, "Friendly Horizon" design, WPF/XAML)
 
-## Design Philosophy: "Friendly Horizon" v2.0 (Light Theme)
+## Design Philosophy: "Friendly Horizon" v3.0 (Light Theme)
 
 Any UI/UX development (especially for `git-sync-gui.ps1` or web dashboards) must adhere to these Modern UI principles:
 
@@ -23,6 +23,8 @@ Any UI/UX development (especially for `git-sync-gui.ps1` or web dashboards) must
       - Behind: `#FF9800` (Orange)
       - Diverged: `#9C27B0` (Purple)
       - Error: `#FF5252` (Red)
+      - Syncing: `#00BCD4` (Cyan)
+      - Pending: `#757575` (Gray)
     - **Controls:** Use **Card Layouts** for lists (Border with rounded corners, padding, hover effects).
     - **Indicators:** Use colored shapes (Ellipse) for status instead of text boxes.
 2.  **Interaction:** Dynamic feedback (hover states on cards and buttons, smooth transitions). Code should not feel static.
@@ -41,7 +43,8 @@ Any UI/UX development (especially for `git-sync-gui.ps1` or web dashboards) must
 - **PowerShell:**
   - Use `Join-Path` for cross-platform compatibility.
   - Implement `try/catch` blocks for all external command executions (like `git`).
-  - Maintain the logging format: `[TIME] [COMMAND/RESULT] Message`.
+  - Maintain the logging format: `[TIME][LEVEL] Message`.
+  - Use `#region` blocks to organize code into logical sections.
 - **GUI (WPF/Windows Forms in PS):**
   - **Robust Control Access:** **CRITICAL RULE**. When accessing UI controls by name (e.g., `$TxtCountSuccess`), ALWAYS perform double null checks for both the variable and the property (e.g., `if ($Txt -ne $null -and $Txt.Text -ne $null)`). Use `try-catch` blocks around UI update logic.
   - **Framework:** Use **WPF (XAML)** over Windows Forms for better styling capabilities.
@@ -66,7 +69,7 @@ Any UI/UX development (especially for `git-sync-gui.ps1` or web dashboards) must
 
 When updating or fixing the app, ensure these core features remain intact:
 
-1.  **Auto-Discovery:** Ability to recursively find `.git` folders given a parent path.
+1.  **Auto-Discovery:** Ability to find `.git` folders given a parent path.
 2.  **Git Status Detection:** Automatically check and display repository status (branch, clean/dirty, ahead/behind).
 3.  **Real-Time Logging:** All commands, progress, and status updates must be displayed in the GUI's "Show Log" window in real-time.
 4.  **Persistent Logging:** Logs must be auto-written to a file with the format `yyyy-MM-dd-<ParentFolder>.log`. This file must mirror the Real-Time Log exactly.
@@ -75,8 +78,10 @@ When updating or fixing the app, ensure these core features remain intact:
 7.  **Keyboard Shortcuts:** Power users should have keyboard shortcuts for common actions.
 8.  **Async Operations:** All Git operations must run asynchronously to keep UI responsive.
 9.  **Virtualization:** Large repository lists must use UI virtualization for performance.
+10. **Settings Persistence:** User preferences saved to JSON (`%APPDATA%\SuperGit-Tools\settings.json`).
+11. **Recent Folders:** Quick access to recently used parent folders in sidebar.
 
-### 4. UI/UX Best Practices (v2.0)
+### 4. UI/UX Best Practices (v3.0)
 
 - **Light Theme Logic:** Ensure dark text is used on light backgrounds.
 - **Avoid Pure White:** Use `#F5F5F5` or similar soft whites for large areas to reduce glare.
@@ -89,12 +94,14 @@ When updating or fixing the app, ensure these core features remain intact:
   - Path: 10px Regular
 - **Error Handling:** Show detailed error messages with actionable suggestions.
 - **Performance:** Throttle UI updates to maintain 30+ fps during operations.
+- **Elapsed Time:** Display sync duration in status bar during operations.
 
 ## Quick Reference
 
 - **Run CLI Sync:** `.\git-sync.ps1 -ParentFolder <path>`
 - **Run GUI:** `.\git-sync-gui.ps1`
 - **Log Location:** Same directory as parent folder, format `yyyy-MM-dd-<Folder>.log`
+- **Settings Location:** `%APPDATA%\SuperGit-Tools\settings.json`
 - **Keyboard Shortcuts (GUI):**
   - `Ctrl+F`: Focus search
   - `Ctrl+R` or `F5`: Refresh status
@@ -102,8 +109,8 @@ When updating or fixing the app, ensure these core features remain intact:
 
 ## Future Considerations
 
-- **Settings Persistence:** Implement JSON-based settings file for user preferences.
-- **Recent Folders:** Add quick access to recently used parent folders.
+- ~~**Settings Persistence:** Implement JSON-based settings file for user preferences.~~ ✅ **DONE (v3.0)**
+- ~~**Recent Folders:** Add quick access to recently used parent folders.~~ ✅ **DONE (v3.0)**
 - **Repository Details Panel:** Sliding panel with detailed repo information and recent commits.
 - **Scheduled Sync:** Background auto-sync at configurable intervals.
 - ~~**Multi-threading Optimization:** Parallel status checking for large repository counts.~~ ✅ **DONE (v2.1)**
@@ -119,15 +126,24 @@ When updating or fixing the app, ensure these core features remain intact:
 1. **Collection Modified Exception:** When iterating over `ObservableCollection` or similar, always snapshot first if background threads may modify it.
 2. **RunspacePool Throttling:** Use `[Environment]::ProcessorCount * 2` as a sensible thread limit.
 3. **Queue Polling:** Use `DispatcherTimer` with 50ms interval to poll synchronized queues for UI updates.
+4. **Unified Timer:** Use a single `DispatcherTimer` to poll all queues (`LogQueue`, `StatusQueue`, `SyncQueue`, `ScanQueue`) rather than multiple independent timers.
 
 ### Git Command Reliability
 
 1. **Avoid parsing `git status --porcelain -b` header** for branch names - it varies by git version and config.
 2. **Use dedicated commands:** `git rev-parse` is far more reliable than regex parsing.
 3. **Array Context:** Always wrap git output in `@(...)` to force array context for consistent indexing.
+4. **GIT_REDIRECT_STDERR_TO_STDOUT:** Set `$env:GIT_REDIRECT_STDERR_TO_STDOUT = "1"` to capture all git output.
 
 ### PowerShell GUI Best Practices
 
 1. **Double Null Checks:** Always check both `$Control` and `$Control.Property` before assignment.
 2. **No Emojis:** Avoid all emoji characters to prevent encoding issues in PowerShell 5.1.
 3. **Runspace Isolation:** Functions used inside Runspaces must be self-contained (no external references).
+4. **Region Organization:** Use `#region` blocks to organize large scripts into logical sections for maintainability.
+
+### Architecture (v3.0)
+
+1. **Single-File Structure:** PowerShell GUI apps work best as a single file with clear `#region` organization.
+2. **Queue-Based Communication:** Use `[System.Collections.Queue]::Synchronized()` for thread-safe message passing.
+3. **Settings Pattern:** Store JSON settings in `$env:APPDATA\<AppName>\settings.json` for proper Windows integration.
