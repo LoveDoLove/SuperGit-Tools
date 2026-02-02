@@ -636,15 +636,7 @@ Function Scan-Repositories {
     }
 }
 
-Function Start-BackgroundStatusCheck {
-    # Simple sequential check
-    foreach ($repo in $Script:AllRepos) {
-        Update-RepoStatus $repo
-        [System.Windows.Forms.Application]::DoEvents()
-    }
-    Update-Status "Status check complete"
-    Log-Message "Status check complete"
-}
+# Old synchronous Start-BackgroundStatusCheck removed - using async version defined later
 
 Function Refresh-AllRepoStatus {
     if ($Script:AllRepos.Count -eq 0) {
@@ -654,13 +646,8 @@ Function Refresh-AllRepoStatus {
     Update-Status "Refreshing status for all repositories..."
     Log-Message "Refreshing repository status..."
     
-    foreach ($repo in $Script:AllRepos) {
-        Update-RepoStatus $repo
-        [System.Windows.Forms.Application]::DoEvents()
-    }
-    
-    Update-Status "Status refresh complete"
-    Log-Message "Status refresh complete"
+    # Use the async background status check instead of synchronous loop
+    Start-BackgroundStatusCheck
 }
 
 Function Update-Statistics {
@@ -1081,51 +1068,87 @@ Function Initialize-StatusPool {
 }
 
 Function Submit-StatusJob($repoPath) {
-    # Define the worker script block - needs Get-GitStatus logic self-contained
+    # Define the worker script block - uses dedicated git commands for reliability
     $workerScript = {
         param($repoPath, $queue)
         
-        # Embedded simplified Get-GitStatus to ensure isolation
         function Get-StatusLocal ($path) {
+            $res = @{ 
+                Branch         = "unknown"
+                IsDirty        = $false
+                Ahead          = 0
+                Behind         = 0
+                Status         = "Clean"
+                StatusColor    = "#4CAF50"
+                DetailedStatus = "Up to date"
+            }
+            
             try {
                 Push-Location $path
-                $env:GIT_REDIRECT_STDERR_TO_STDOUT = "1"
-                $status = git status --porcelain -b 2>&1
                 
-                $res = @{ Branch = "unknown"; IsDirty = $false; Ahead = 0; Behind = 0; Status = "Clean"; StatusColor = "#4CAF50"; DetailedStatus = "" }
-                
-                if ($status) {
-                    $branchLine = $status[0]
-                    if ($branchLine -match '## (.+?)\.\.\.') { $res.Branch = $matches[1] }
-                    elseif ($branchLine -match '## (.+)$') { $res.Branch = $matches[1] }
-                    
-                    if ($branchLine -match '\[ahead (\d+)\]') { $res.Ahead = [int]$matches[1] }
-                    if ($branchLine -match '\[behind (\d+)\]') { $res.Behind = [int]$matches[1] }
-                    if ($branchLine -match '\[ahead (\d+), behind (\d+)\]') { $res.Ahead = [int]$matches[1]; $res.Behind = [int]$matches[2] }
-                    
-                    if ($status.Count -gt 1) { $res.IsDirty = $true }
-                    
-                    if ($res.IsDirty) {
-                        $res.Status = "Dirty"; $res.StatusColor = "#FFC107"; $res.DetailedStatus = "Uncommitted changes"
-                    }
-                    elseif ($res.Ahead -gt 0 -and $res.Behind -gt 0) {
-                        $res.Status = "Diverged"; $res.StatusColor = "#9C27B0"; $res.DetailedStatus = "Ahead $($res.Ahead), Behind $($res.Behind)"
-                    }
-                    elseif ($res.Ahead -gt 0) {
-                        $res.Status = "Ahead"; $res.StatusColor = "#2196F3"; $res.DetailedStatus = "Ahead $($res.Ahead)"
-                    }
-                    elseif ($res.Behind -gt 0) {
-                        $res.Status = "Behind"; $res.StatusColor = "#FF9800"; $res.DetailedStatus = "Behind $($res.Behind)"
-                    }
+                # 1. Get Branch Name (most reliable method)
+                $branch = git rev-parse --abbrev-ref HEAD 2>&1
+                if ($LASTEXITCODE -eq 0 -and $branch) {
+                    $res.Branch = $branch.Trim()
                 }
+                
+                # 2. Check for dirty working directory
+                $dirtyCheck = @(git status --porcelain 2>&1)
+                if ($dirtyCheck.Count -gt 0 -and $dirtyCheck[0] -notmatch '^fatal:') {
+                    $res.IsDirty = $true
+                }
+                
+                # 3. Check ahead/behind (requires upstream tracking branch)
+                $upstream = git rev-parse --abbrev-ref "@{u}" 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    # Has upstream, get counts
+                    $ahead = git rev-list --count "@{u}..HEAD" 2>&1
+                    if ($LASTEXITCODE -eq 0) { $res.Ahead = [int]$ahead }
+                    
+                    $behind = git rev-list --count "HEAD..@{u}" 2>&1
+                    if ($LASTEXITCODE -eq 0) { $res.Behind = [int]$behind }
+                }
+                
+                # 4. Determine status based on collected data
+                if ($res.IsDirty) {
+                    $res.Status = "Dirty"
+                    $res.StatusColor = "#FFC107"
+                    $res.DetailedStatus = "Uncommitted changes"
+                }
+                elseif ($res.Ahead -gt 0 -and $res.Behind -gt 0) {
+                    $res.Status = "Diverged"
+                    $res.StatusColor = "#9C27B0"
+                    $res.DetailedStatus = "Ahead $($res.Ahead), Behind $($res.Behind)"
+                }
+                elseif ($res.Ahead -gt 0) {
+                    $res.Status = "Ahead"
+                    $res.StatusColor = "#2196F3"
+                    $res.DetailedStatus = "Ahead $($res.Ahead) commits"
+                }
+                elseif ($res.Behind -gt 0) {
+                    $res.Status = "Behind"
+                    $res.StatusColor = "#FF9800"
+                    $res.DetailedStatus = "Behind $($res.Behind) commits"
+                }
+                
                 return $res
             }
-            catch { return @{ Status = "Error"; StatusColor = "#FF5252"; DetailedStatus = "Check Failed" } }
+            catch {
+                return @{ 
+                    Branch         = "error"
+                    Status         = "Error"
+                    StatusColor    = "#FF5252"
+                    DetailedStatus = "Check Failed: $_"
+                    IsDirty        = $false
+                    Ahead          = 0
+                    Behind         = 0
+                }
+            }
             finally { Pop-Location }
         }
 
         $result = Get-StatusLocal $repoPath
-        $result.Path = $repoPath # Add path to identify it back in UI
+        $result.Path = $repoPath
         $queue.Enqueue($result)
     }
 
@@ -1140,14 +1163,17 @@ Function Submit-StatusJob($repoPath) {
 }
 
 Function Start-BackgroundStatusCheck {
-    # Legacy wrapper or bulk starter
+    # Async parallel status checker
     if ($Script:AllRepos.Count -eq 0) { return }
     
     Update-Status "Checking repository status (Parallel)..."
     Initialize-StatusPool
     
-    foreach ($repo in $Script:AllRepos) {
-        Submit-StatusJob $repo.Path
+    # Create snapshot to prevent "Collection was modified" error during enumeration
+    $repoSnapshot = @($Script:AllRepos | ForEach-Object { $_.Path })
+    
+    foreach ($path in $repoSnapshot) {
+        Submit-StatusJob $path
     }
 }
 
