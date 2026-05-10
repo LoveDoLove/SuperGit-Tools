@@ -56,10 +56,11 @@
         <li><a href="#prerequisites">Prerequisites</a></li>
         <li><a href="#installation">Installation</a></li>
       </ul>
-    </li>
-    <li><a href="#usage">Usage</a></li>
-    <li><a href="#roadmap">Roadmap</a></li>
-    <li><a href="#contributing">Contributing</a></li>
+     </li>
+     <li><a href="#usage">Usage</a></li>
+     <li><a href="#ai-long-term-memory--skills">AI Long-Term Memory & Skills</a></li>
+     <li><a href="#roadmap">Roadmap</a></li>
+     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
     <li><a href="#acknowledgments">Acknowledgments</a></li>
@@ -151,6 +152,34 @@ Run the CLI script for a text-based interactive experience:
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- ROADMAP -->
+
+
+## AI Long-Term Memory & Skills
+
+### AI Long-Term Memory Mechanism
+
+| Level | File Location | Content |
+|---|---|---|
+| Long-term memory | `MEMORY.md` | User preferences, project goals, persistent conventions |
+| Daily log | `memory/YYYY-MM-DD.md` | Daily AI work records, decisions, and notes |
+| Task tracking | `memory/tasks.md` | Cross-session todo/progress tracking |
+| Skill assets | `.agents/skills/` | Installed and reusable AI Agent skill packages |
+
+### AI Agent Skill Packages
+
+Skill packages are reusable AI capabilities organized under `.agents/skills/<skill-name>/`, with `SKILL.md` as the primary entry.
+
+Built-in package:
+- `karpathy-guidelines`: behavioral guidelines to reduce common LLM coding mistakes.
+
+Skill workflow:
+1. On task intake, check local `.agents/skills/` first and reuse existing packages.
+2. If no suitable local package exists, search GitHub open-source repositories or Skills.sh.
+3. Install under `.agents/skills/<skill-name>/` and update `.agents/skills/INDEX.md`.
+
+Policy:
+- All skill packages must be sourced from GitHub open-source repositories (not self-authored local rewrites).
+
 
 ## Roadmap
 
