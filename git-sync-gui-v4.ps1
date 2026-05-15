@@ -49,7 +49,7 @@ function Load-Settings {
         if ($null -ne $json.MaxDepth) { $Script:Settings.MaxDepth = [int]$json.MaxDepth }
         if ($null -ne $json.RecentFoldersCount) { $Script:Settings.RecentFoldersCount = [int]$json.RecentFoldersCount }
         if ($null -ne $json.RecentFolders) { $Script:Settings.RecentFolders = @($json.RecentFolders) }
-        if ($null -ne $json.MaxParallel) { $Script:Settings.MaxParallel = [int]$json.MaxParallel }
+        if ($null -ne $json.MaxParallel) { $Script:Settings.MaxParallel = [Math]::Min(16, [Math]::Max(2, [int]$json.MaxParallel)) }
     }
     catch {
     }
@@ -327,7 +327,7 @@ $Script:WorkerHandle = $null
 $Script:CurrentLogFile = $null
 $Script:OperationTotal = 0
 $Script:OperationDone = 0
-# Benchmarking shows 400 keeps each 80ms UI tick responsive while draining bursty worker output quickly.
+# Benchmarking shows processing 400 items per 80ms timer tick keeps UI responsive while draining bursty output quickly.
 $Script:QueueBatchLimit = 400
 
 function Get-StateBrush {
@@ -463,8 +463,8 @@ function Get-MaxDepthValue {
 }
 
 function Get-MaxParallelValue {
-    # Keep worker count practical: at least 2, at most 16, and prefer the larger value
-    # between CPU-based baseline and user-configured value for large repo sets.
+    # Keep worker count practical: at least 2, hard cap 16 to avoid oversubscription on large machines,
+    # and prefer the larger value between CPU baseline and user-configured value.
     $cpuBound = [Math]::Max(2, [Environment]::ProcessorCount)
     $configured = [Math]::Max(2, [int]$Script:Settings.MaxParallel)
     return [Math]::Min(16, [Math]::Max($cpuBound, $configured))
