@@ -1,12 +1,12 @@
 #requires -Version 5.1
 
-<#
+<#!
 .SYNOPSIS
     SuperGit-Tools GUI v4 - Friendly Horizon rewrite.
 
 .DESCRIPTION
-    A simpler GUI rewrite aligned with the safer v4 sync flow:
-    recursive discovery, clearer repo states, ff-only sync, and live logs.
+    Rewritten backend logic for responsiveness and speed:
+    shared v4 core, parallel status/sync workers, and O(1) item indexing.
 #>
 
 $ErrorActionPreference = "Stop"
@@ -15,10 +15,10 @@ $env:GIT_REDIRECT_STDERR_TO_STDOUT = "1"
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName System.Windows.Forms
 
-try {
-    $null = git --version
-}
-catch {
+$Script:CoreScriptPath = Join-Path $PSScriptRoot "git-sync-core-v4.ps1"
+. $Script:CoreScriptPath
+
+if (-not (Test-SgtGitAvailable)) {
     [System.Windows.MessageBox]::Show(
         "Git is not installed or not available in PATH.",
         "Git Not Found",
@@ -36,6 +36,7 @@ $Script:Settings = @{
     MaxDepth           = 5
     RecentFolders      = @()
     RecentFoldersCount = 5
+    MaxParallel        = 8
 }
 
 function Load-Settings {
@@ -48,6 +49,7 @@ function Load-Settings {
         if ($null -ne $json.MaxDepth) { $Script:Settings.MaxDepth = [int]$json.MaxDepth }
         if ($null -ne $json.RecentFoldersCount) { $Script:Settings.RecentFoldersCount = [int]$json.RecentFoldersCount }
         if ($null -ne $json.RecentFolders) { $Script:Settings.RecentFolders = @($json.RecentFolders) }
+        if ($null -ne $json.MaxParallel) { $Script:Settings.MaxParallel = [int]$json.MaxParallel }
     }
     catch {
     }
@@ -95,7 +97,6 @@ function Add-RecentFolder {
         WindowStartupLocation="CenterScreen"
         Background="#F5F7FA">
     <Window.Resources>
-        <SolidColorBrush x:Key="WindowBrush" Color="#F5F7FA" />
         <SolidColorBrush x:Key="PanelBrush" Color="#FFFFFF" />
         <SolidColorBrush x:Key="SidebarBrush" Color="#EEF3F8" />
         <SolidColorBrush x:Key="BorderBrush" Color="#D7E1EA" />
@@ -166,7 +167,7 @@ function Add-RecentFolder {
                 </Grid.ColumnDefinitions>
                 <StackPanel>
                     <TextBlock Text="SuperGit Tools" FontSize="24" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" />
-                    <TextBlock Text="Friendly Horizon v4 GUI rewrite" FontSize="13" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0" />
+                    <TextBlock Text="Friendly Horizon v4 - fast backend rewrite" FontSize="13" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0" />
                 </StackPanel>
                 <Border Grid.Column="1" Background="#EAF2FF" CornerRadius="999" Padding="12,6" VerticalAlignment="Center">
                     <TextBlock Name="TxtLastRun" Text="Ready" Foreground="{StaticResource AccentDarkBrush}" FontWeight="SemiBold" />
@@ -227,9 +228,9 @@ function Add-RecentFolder {
                     <Separator Margin="0,4,0,14" />
 
                     <TextBlock Text="Notes" FontSize="16" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" Margin="0,0,0,10" />
-                    <TextBlock Text="• Scan discovers repos recursively" Foreground="{StaticResource MutedBrush}" Margin="0,0,0,6" TextWrapping="Wrap" />
-                    <TextBlock Text="• Sync uses git fetch --all --prune and git pull --ff-only" Foreground="{StaticResource MutedBrush}" Margin="0,0,0,6" TextWrapping="Wrap" />
-                    <TextBlock Text="• Dirty repos are skipped unless Include Dirty Repos is checked" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                    <TextBlock Text="• Parallel status check for faster large-folder scan" Foreground="{StaticResource MutedBrush}" Margin="0,0,0,6" TextWrapping="Wrap" />
+                    <TextBlock Text="• Safe sync: fetch --all --prune + pull --ff-only" Foreground="{StaticResource MutedBrush}" Margin="0,0,0,6" TextWrapping="Wrap" />
+                    <TextBlock Text="• O(1) repo index updates for smoother UI" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
                 </StackPanel>
             </Border>
 
@@ -318,29 +319,32 @@ foreach ($controlName in $controlNames) {
 }
 
 $Script:RepoItems = [System.Collections.ObjectModel.ObservableCollection[object]]::new()
+$Script:RepoIndex = @{}
 $Script:RepoGrid.ItemsSource = $Script:RepoItems
 $Script:Queue = [System.Collections.Queue]::Synchronized([System.Collections.Queue]::new())
 $Script:Worker = $null
 $Script:WorkerHandle = $null
 $Script:CurrentLogFile = $null
+$Script:OperationTotal = 0
+$Script:OperationDone = 0
 
 function Get-StateBrush {
     param([string]$State)
 
     switch -Wildcard ($State) {
-        "Clean"         { return "#22C55E" }
-        "Synced"        { return "#22C55E" }
-        "Fetched"       { return "#0EA5E9" }
-        "Ahead"         { return "#3B82F6" }
-        "Behind"        { return "#F59E0B" }
-        "Diverged"      { return "#A855F7" }
-        "Dirty*"        { return "#FBBF24" }
-        "Skipped*"      { return "#94A3B8" }
-        "DryRun"        { return "#38BDF8" }
-        "NoUpstream"    { return "#8B5CF6" }
-        "Failed"        { return "#EF4444" }
-        "Error"         { return "#EF4444" }
-        default         { return "#64748B" }
+        "Clean" { return "#22C55E" }
+        "Synced" { return "#22C55E" }
+        "Fetched" { return "#0EA5E9" }
+        "Ahead" { return "#3B82F6" }
+        "Behind" { return "#F59E0B" }
+        "Diverged" { return "#A855F7" }
+        "Dirty*" { return "#FBBF24" }
+        "Skipped*" { return "#94A3B8" }
+        "DryRun" { return "#38BDF8" }
+        "NoUpstream" { return "#8B5CF6" }
+        "Failed" { return "#EF4444" }
+        "Error" { return "#EF4444" }
+        default { return "#64748B" }
     }
 }
 
@@ -350,10 +354,7 @@ function Set-Status {
 }
 
 function New-LogFilePath {
-    param(
-        [string]$Mode,
-        [string]$RootFolder
-    )
+    param([string]$Mode, [string]$RootFolder)
 
     $rootName = if ([string]::IsNullOrWhiteSpace($RootFolder)) { "workspace" } else { Split-Path $RootFolder -Leaf }
     $dateStamp = Get-Date -Format "yyyy-MM-dd"
@@ -377,15 +378,14 @@ function Append-LogLine {
     }
 }
 
-function Find-RepoItem {
-    param([string]$Path)
-    return $Script:RepoItems | Where-Object { $_.Path -eq $Path } | Select-Object -First 1
-}
-
 function Upsert-RepoItem {
     param($Record)
 
-    $item = Find-RepoItem -Path $Record.Path
+    $item = $null
+    if ($Script:RepoIndex.ContainsKey($Record.Path)) {
+        $item = $Script:RepoIndex[$Record.Path]
+    }
+
     if ($null -eq $item) {
         $item = [PSCustomObject]@{
             Name        = $Record.Name
@@ -399,6 +399,7 @@ function Upsert-RepoItem {
             IsDirty     = $Record.IsDirty
         }
         $Script:RepoItems.Add($item)
+        $Script:RepoIndex[$Record.Path] = $item
         return
     }
 
@@ -459,11 +460,18 @@ function Get-MaxDepthValue {
     }
 }
 
+function Get-MaxParallelValue {
+    $cpuBound = [Math]::Max(2, [Environment]::ProcessorCount)
+    $configured = [Math]::Max(2, [int]$Script:Settings.MaxParallel)
+    return [Math]::Min(16, [Math]::Max($cpuBound, $configured))
+}
+
 function Start-Worker {
     param(
         [string]$Mode,
         [scriptblock]$ScriptBlock,
-        [object[]]$Arguments
+        [object[]]$Arguments,
+        [int]$Total = 0
     )
 
     if ($null -ne $Script:WorkerHandle -and -not $Script:WorkerHandle.IsCompleted) {
@@ -477,6 +485,8 @@ function Start-Worker {
     }
 
     $Script:Queue.Clear()
+    $Script:OperationTotal = $Total
+    $Script:OperationDone = 0
     $Script:ProgressMain.Value = 0
     $Script:CurrentLogFile = New-LogFilePath -Mode $Mode -RootFolder (Get-SelectedRootFolder)
     $Script:LogTextBox.Clear()
@@ -499,7 +509,7 @@ function Process-Queue {
     $needsRefresh = $false
     $processed = 0
 
-    while ($Script:Queue.Count -gt 0 -and $processed -lt 200) {
+    while ($Script:Queue.Count -gt 0 -and $processed -lt 400) {
         $processed++
         $entry = $Script:Queue.Dequeue()
 
@@ -507,17 +517,19 @@ function Process-Queue {
             "Log" {
                 Append-LogLine -Message $entry.Message -Level $entry.Level -Timestamp $entry.Timestamp
             }
+            "Total" {
+                $Script:OperationTotal = [int]$entry.Value
+                if ($Script:OperationTotal -eq 0) {
+                    $Script:ProgressMain.Value = 100
+                }
+            }
             "Repo" {
                 Upsert-RepoItem -Record $entry.Record
+                $Script:OperationDone++
+                if ($Script:OperationTotal -gt 0) {
+                    $Script:ProgressMain.Value = [math]::Round(($Script:OperationDone / $Script:OperationTotal) * 100, 0)
+                }
                 $needsRefresh = $true
-            }
-            "Progress" {
-                if ($null -ne $entry.Value) {
-                    $Script:ProgressMain.Value = [double]$entry.Value
-                }
-                if ($entry.Message) {
-                    Set-Status -Message $entry.Message
-                }
             }
             "Done" {
                 $Script:ProgressMain.Value = 100
@@ -567,143 +579,98 @@ function Start-Scan {
     }
 
     $maxDepth = Get-MaxDepthValue
+    $maxParallel = Get-MaxParallelValue
     $Script:Settings.MaxDepth = $maxDepth
     Add-RecentFolder -Path $rootFolder
     Refresh-RecentFolders
 
     $Script:RepoItems.Clear()
+    $Script:RepoIndex = @{}
     Update-Summary
 
     $scanScript = {
-        param($rootFolder, $maxDepth, $queue)
+        param($rootFolder, $maxDepth, $maxParallel, $queue, $corePath)
 
         $ErrorActionPreference = "Stop"
         $env:GIT_REDIRECT_STDERR_TO_STDOUT = "1"
+        . $corePath
 
-        function Write-QueueLog {
-            param($Message, $Level = "INFO")
+        function Log-Message {
+            param($message, $level = "INFO")
             $queue.Enqueue([PSCustomObject]@{
                     Type      = "Log"
                     Timestamp = (Get-Date -Format "HH:mm:ss")
-                    Level     = $Level
-                    Message   = $Message
+                    Level     = $level
+                    Message   = $message
                 })
         }
 
-        function Get-RepoDetail {
-            param($State, $Ahead, $Behind, $Dirty, $HasUpstream)
-
-            if (-not $HasUpstream) { return "No upstream configured" }
-            if ($State -eq "Clean") { return "Up to date" }
-            if ($State -eq "Dirty") { return "Uncommitted changes" }
-            if ($State -eq "DirtyNoUpstream") { return "Dirty working tree, no upstream" }
-            if ($State -eq "DirtyAhead") { return "Dirty, ahead $Ahead commits" }
-            if ($State -eq "DirtyBehind") { return "Dirty, behind $Behind commits" }
-            if ($State -eq "DirtyDiverged") { return "Dirty, ahead $Ahead / behind $Behind" }
-            if ($State -eq "Ahead") { return "Ahead $Ahead commits" }
-            if ($State -eq "Behind") { return "Behind $Behind commits" }
-            if ($State -eq "Diverged") { return "Ahead $Ahead / Behind $Behind" }
-            return $State
-        }
-
-        function Get-RepoStatus {
-            param($RepoPath)
-
-            Push-Location $RepoPath
-            try {
-                $branch = (git rev-parse --abbrev-ref HEAD).Trim()
-                $dirty = [bool](git status --porcelain)
-                $upstream = (git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null)
-                $hasUpstream = ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($upstream))
-                $ahead = 0
-                $behind = 0
-
-                if ($hasUpstream) {
-                    $counts = (git rev-list --left-right --count "HEAD...@{u}").Trim()
-                    if ($counts) {
-                        $parts = $counts -split "\s+"
-                        if ($parts.Count -ge 2) {
-                            $ahead = [int]$parts[0]
-                            $behind = [int]$parts[1]
-                        }
-                    }
-                }
-
-                $state = "Clean"
-                if (-not $hasUpstream) {
-                    $state = if ($dirty) { "DirtyNoUpstream" } else { "NoUpstream" }
-                }
-                elseif ($ahead -gt 0 -and $behind -gt 0) {
-                    $state = if ($dirty) { "DirtyDiverged" } else { "Diverged" }
-                }
-                elseif ($ahead -gt 0) {
-                    $state = if ($dirty) { "DirtyAhead" } else { "Ahead" }
-                }
-                elseif ($behind -gt 0) {
-                    $state = if ($dirty) { "DirtyBehind" } else { "Behind" }
-                }
-                elseif ($dirty) {
-                    $state = "Dirty"
-                }
-
-                return [PSCustomObject]@{
-                    Name      = Split-Path $RepoPath -Leaf
-                    Branch    = $branch
-                    Status    = $state
-                    Ahead     = $ahead
-                    Behind    = $behind
-                    Detail    = Get-RepoDetail -State $state -Ahead $ahead -Behind $behind -Dirty $dirty -HasUpstream $hasUpstream
-                    Path      = $RepoPath
-                    IsDirty   = $dirty
-                }
-            }
-            finally {
-                Pop-Location
-            }
-        }
-
-        Write-QueueLog -Message "Scanning $rootFolder"
-        $gitDirs = Get-ChildItem -Path $rootFolder -Directory -Filter ".git" -Recurse -Depth $maxDepth -ErrorAction SilentlyContinue
-        $repoPaths = @($gitDirs | ForEach-Object { Split-Path $_.FullName -Parent } | Sort-Object -Unique)
+        $repoPaths = @(Get-SgtRepoPaths -RootFolder $rootFolder -MaxDepth $maxDepth)
         $total = $repoPaths.Count
+        $queue.Enqueue([PSCustomObject]@{ Type = "Total"; Value = $total })
 
         if ($total -eq 0) {
-            $queue.Enqueue([PSCustomObject]@{
-                    Type    = "Done"
-                    Message = "Scan complete. No repositories found."
-                })
+            $queue.Enqueue([PSCustomObject]@{ Type = "Done"; Message = "Scan complete. No repositories found." })
             return
         }
 
-        $index = 0
-        foreach ($repoPath in $repoPaths) {
-            $index++
-            $queue.Enqueue([PSCustomObject]@{
-                    Type    = "Progress"
-                    Value   = [math]::Round(($index / $total) * 100, 0)
-                    Message = "Scanning [$index/$total] $(Split-Path $repoPath -Leaf)"
-                })
+        Log-Message "Found $total repositories. Checking status in parallel ($maxParallel workers)."
 
-            try {
-                $record = Get-RepoStatus -RepoPath $repoPath
-                $queue.Enqueue([PSCustomObject]@{
-                        Type   = "Repo"
-                        Record = $record
-                    })
-                Write-QueueLog -Message "Found $($record.Name) [$($record.Status)]"
+        $pool = [runspacefactory]::CreateRunspacePool(1, [Math]::Min($maxParallel, $total))
+        $pool.Open()
+        $jobs = New-Object System.Collections.ArrayList
+
+        foreach ($repoPath in $repoPaths) {
+            $ps = [PowerShell]::Create()
+            $ps.RunspacePool = $pool
+            $jobScript = {
+                param($repoPath, $queue, $corePath)
+                . $corePath
+                try {
+                    $status = Get-SgtRepoStatus -RepoPath $repoPath
+                    $record = [PSCustomObject]@{
+                        Name    = $status.RepoName
+                        Branch  = $status.Branch
+                        Status  = $status.State
+                        Ahead   = $status.Ahead
+                        Behind  = $status.Behind
+                        Detail  = $status.Detail
+                        Path    = $status.RepoPath
+                        IsDirty = $status.Dirty
+                    }
+                    $queue.Enqueue([PSCustomObject]@{ Type = "Repo"; Record = $record })
+                }
+                catch {
+                    $record = [PSCustomObject]@{
+                        Name    = Split-Path $repoPath -Leaf
+                        Branch  = "unknown"
+                        Status  = "Error"
+                        Ahead   = 0
+                        Behind  = 0
+                        Detail  = $_.Exception.Message
+                        Path    = $repoPath
+                        IsDirty = $false
+                    }
+                    $queue.Enqueue([PSCustomObject]@{ Type = "Repo"; Record = $record })
+                }
             }
-            catch {
-                Write-QueueLog -Message "Failed to scan ${repoPath}: $($_.Exception.Message)" -Level "ERROR"
-            }
+            [void]$ps.AddScript($jobScript).AddArgument($repoPath).AddArgument($queue).AddArgument($corePath)
+            $handle = $ps.BeginInvoke()
+            [void]$jobs.Add([PSCustomObject]@{ PS = $ps; Handle = $handle })
         }
 
-        $queue.Enqueue([PSCustomObject]@{
-                Type    = "Done"
-                Message = "Scan complete. Found $total repositories."
-            })
+        foreach ($job in $jobs) {
+            try { $job.PS.EndInvoke($job.Handle) | Out-Null } catch { }
+            $job.PS.Dispose()
+        }
+
+        $pool.Close()
+        $pool.Dispose()
+
+        $queue.Enqueue([PSCustomObject]@{ Type = "Done"; Message = "Scan complete. Found $total repositories." })
     }
 
-    [void](Start-Worker -Mode "scan" -ScriptBlock $scanScript -Arguments @($rootFolder, $maxDepth, $Script:Queue))
+    [void](Start-Worker -Mode "scan" -ScriptBlock $scanScript -Arguments @($rootFolder, $maxDepth, $maxParallel, $Script:Queue, $Script:CoreScriptPath))
 }
 
 function Start-Refresh {
@@ -712,124 +679,89 @@ function Start-Refresh {
     }
 
     $repoPaths = @($Script:RepoItems | ForEach-Object { $_.Path })
+    $maxParallel = Get-MaxParallelValue
 
     $refreshScript = {
-        param($repoPaths, $queue)
+        param($repoPaths, $maxParallel, $queue, $corePath)
 
         $ErrorActionPreference = "Stop"
+        . $corePath
 
-        function Write-QueueLog {
-            param($Message, $Level = "INFO")
+        function Log-Message {
+            param($message, $level = "INFO")
             $queue.Enqueue([PSCustomObject]@{
                     Type      = "Log"
                     Timestamp = (Get-Date -Format "HH:mm:ss")
-                    Level     = $Level
-                    Message   = $Message
+                    Level     = $level
+                    Message   = $message
                 })
-        }
-
-        function Get-RepoDetail {
-            param($State, $Ahead, $Behind, $Dirty, $HasUpstream)
-
-            if (-not $HasUpstream) { return "No upstream configured" }
-            if ($State -eq "Clean") { return "Up to date" }
-            if ($State -eq "Dirty") { return "Uncommitted changes" }
-            if ($State -eq "DirtyNoUpstream") { return "Dirty working tree, no upstream" }
-            if ($State -eq "DirtyAhead") { return "Dirty, ahead $Ahead commits" }
-            if ($State -eq "DirtyBehind") { return "Dirty, behind $Behind commits" }
-            if ($State -eq "DirtyDiverged") { return "Dirty, ahead $Ahead / behind $Behind" }
-            if ($State -eq "Ahead") { return "Ahead $Ahead commits" }
-            if ($State -eq "Behind") { return "Behind $Behind commits" }
-            if ($State -eq "Diverged") { return "Ahead $Ahead / Behind $Behind" }
-            return $State
-        }
-
-        function Get-RepoStatus {
-            param($RepoPath)
-
-            Push-Location $RepoPath
-            try {
-                $branch = (git rev-parse --abbrev-ref HEAD).Trim()
-                $dirty = [bool](git status --porcelain)
-                $upstream = (git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null)
-                $hasUpstream = ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($upstream))
-                $ahead = 0
-                $behind = 0
-
-                if ($hasUpstream) {
-                    $counts = (git rev-list --left-right --count "HEAD...@{u}").Trim()
-                    if ($counts) {
-                        $parts = $counts -split "\s+"
-                        if ($parts.Count -ge 2) {
-                            $ahead = [int]$parts[0]
-                            $behind = [int]$parts[1]
-                        }
-                    }
-                }
-
-                $state = "Clean"
-                if (-not $hasUpstream) {
-                    $state = if ($dirty) { "DirtyNoUpstream" } else { "NoUpstream" }
-                }
-                elseif ($ahead -gt 0 -and $behind -gt 0) {
-                    $state = if ($dirty) { "DirtyDiverged" } else { "Diverged" }
-                }
-                elseif ($ahead -gt 0) {
-                    $state = if ($dirty) { "DirtyAhead" } else { "Ahead" }
-                }
-                elseif ($behind -gt 0) {
-                    $state = if ($dirty) { "DirtyBehind" } else { "Behind" }
-                }
-                elseif ($dirty) {
-                    $state = "Dirty"
-                }
-
-                return [PSCustomObject]@{
-                    Name      = Split-Path $RepoPath -Leaf
-                    Branch    = $branch
-                    Status    = $state
-                    Ahead     = $ahead
-                    Behind    = $behind
-                    Detail    = Get-RepoDetail -State $state -Ahead $ahead -Behind $behind -Dirty $dirty -HasUpstream $hasUpstream
-                    Path      = $RepoPath
-                    IsDirty   = $dirty
-                }
-            }
-            finally {
-                Pop-Location
-            }
         }
 
         $total = $repoPaths.Count
-        $index = 0
-        foreach ($repoPath in $repoPaths) {
-            $index++
-            $queue.Enqueue([PSCustomObject]@{
-                    Type    = "Progress"
-                    Value   = [math]::Round(($index / $total) * 100, 0)
-                    Message = "Refreshing [$index/$total] $(Split-Path $repoPath -Leaf)"
-                })
+        $queue.Enqueue([PSCustomObject]@{ Type = "Total"; Value = $total })
 
-            try {
-                $record = Get-RepoStatus -RepoPath $repoPath
-                $queue.Enqueue([PSCustomObject]@{
-                        Type   = "Repo"
-                        Record = $record
-                    })
-                Write-QueueLog -Message "Refreshed $($record.Name) [$($record.Status)]"
-            }
-            catch {
-                Write-QueueLog -Message "Failed to refresh ${repoPath}: $($_.Exception.Message)" -Level "ERROR"
-            }
+        if ($total -eq 0) {
+            $queue.Enqueue([PSCustomObject]@{ Type = "Done"; Message = "Refresh complete." })
+            return
         }
 
-        $queue.Enqueue([PSCustomObject]@{
-                Type    = "Done"
-                Message = "Refresh complete."
-            })
+        Log-Message "Refreshing $total repositories in parallel ($maxParallel workers)."
+
+        $pool = [runspacefactory]::CreateRunspacePool(1, [Math]::Min($maxParallel, $total))
+        $pool.Open()
+        $jobs = New-Object System.Collections.ArrayList
+
+        foreach ($repoPath in $repoPaths) {
+            $ps = [PowerShell]::Create()
+            $ps.RunspacePool = $pool
+            $jobScript = {
+                param($repoPath, $queue, $corePath)
+                . $corePath
+                try {
+                    $status = Get-SgtRepoStatus -RepoPath $repoPath
+                    $record = [PSCustomObject]@{
+                        Name    = $status.RepoName
+                        Branch  = $status.Branch
+                        Status  = $status.State
+                        Ahead   = $status.Ahead
+                        Behind  = $status.Behind
+                        Detail  = $status.Detail
+                        Path    = $status.RepoPath
+                        IsDirty = $status.Dirty
+                    }
+                    $queue.Enqueue([PSCustomObject]@{ Type = "Repo"; Record = $record })
+                }
+                catch {
+                    $record = [PSCustomObject]@{
+                        Name    = Split-Path $repoPath -Leaf
+                        Branch  = "unknown"
+                        Status  = "Error"
+                        Ahead   = 0
+                        Behind  = 0
+                        Detail  = $_.Exception.Message
+                        Path    = $repoPath
+                        IsDirty = $false
+                    }
+                    $queue.Enqueue([PSCustomObject]@{ Type = "Repo"; Record = $record })
+                }
+            }
+            [void]$ps.AddScript($jobScript).AddArgument($repoPath).AddArgument($queue).AddArgument($corePath)
+            $handle = $ps.BeginInvoke()
+            [void]$jobs.Add([PSCustomObject]@{ PS = $ps; Handle = $handle })
+        }
+
+        foreach ($job in $jobs) {
+            try { $job.PS.EndInvoke($job.Handle) | Out-Null } catch { }
+            $job.PS.Dispose()
+        }
+
+        $pool.Close()
+        $pool.Dispose()
+
+        $queue.Enqueue([PSCustomObject]@{ Type = "Done"; Message = "Refresh complete." })
     }
 
-    [void](Start-Worker -Mode "refresh" -ScriptBlock $refreshScript -Arguments @($repoPaths, $Script:Queue))
+    [void](Start-Worker -Mode "refresh" -ScriptBlock $refreshScript -Arguments @($repoPaths, $maxParallel, $Script:Queue, $Script:CoreScriptPath) -Total $repoPaths.Count)
 }
 
 function Start-Sync {
@@ -861,168 +793,104 @@ function Start-Sync {
     $includeDirty = [bool]$Script:ChkIncludeDirty.IsChecked
     $dryRun = [bool]$Script:ChkDryRun.IsChecked
     $fetchOnly = [bool]$Script:ChkFetchOnly.IsChecked
+    $maxParallel = Get-MaxParallelValue
 
     $syncScript = {
-        param($repoPaths, $includeDirty, $dryRun, $fetchOnly, $queue)
+        param($repoPaths, $includeDirty, $dryRun, $fetchOnly, $maxParallel, $queue, $corePath)
 
         $ErrorActionPreference = "Stop"
         $env:GIT_REDIRECT_STDERR_TO_STDOUT = "1"
+        . $corePath
 
-        function Write-QueueLog {
-            param($Message, $Level = "INFO")
+        function Log-Message {
+            param($message, $level = "INFO")
             $queue.Enqueue([PSCustomObject]@{
                     Type      = "Log"
                     Timestamp = (Get-Date -Format "HH:mm:ss")
-                    Level     = $Level
-                    Message   = $Message
+                    Level     = $level
+                    Message   = $message
                 })
-        }
-
-        function New-RepoRecord {
-            param($RepoPath, $Branch, $State, $Ahead, $Behind, $Detail, $IsDirty)
-            return [PSCustomObject]@{
-                Name    = Split-Path $RepoPath -Leaf
-                Branch  = $Branch
-                Status  = $State
-                Ahead   = $Ahead
-                Behind  = $Behind
-                Detail  = $Detail
-                Path    = $RepoPath
-                IsDirty = $IsDirty
-            }
-        }
-
-        function Get-RepoStatus {
-            param($RepoPath)
-
-            Push-Location $RepoPath
-            try {
-                $branch = (git rev-parse --abbrev-ref HEAD).Trim()
-                $dirty = [bool](git status --porcelain)
-                $upstream = (git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null)
-                $hasUpstream = ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($upstream))
-                $ahead = 0
-                $behind = 0
-
-                if ($hasUpstream) {
-                    $counts = (git rev-list --left-right --count "HEAD...@{u}").Trim()
-                    if ($counts) {
-                        $parts = $counts -split "\s+"
-                        if ($parts.Count -ge 2) {
-                            $ahead = [int]$parts[0]
-                            $behind = [int]$parts[1]
-                        }
-                    }
-                }
-
-                $state = "Clean"
-                if (-not $hasUpstream) {
-                    $state = if ($dirty) { "DirtyNoUpstream" } else { "NoUpstream" }
-                }
-                elseif ($ahead -gt 0 -and $behind -gt 0) {
-                    $state = if ($dirty) { "DirtyDiverged" } else { "Diverged" }
-                }
-                elseif ($ahead -gt 0) {
-                    $state = if ($dirty) { "DirtyAhead" } else { "Ahead" }
-                }
-                elseif ($behind -gt 0) {
-                    $state = if ($dirty) { "DirtyBehind" } else { "Behind" }
-                }
-                elseif ($dirty) {
-                    $state = "Dirty"
-                }
-
-                return [PSCustomObject]@{
-                    RepoPath  = $RepoPath
-                    Branch    = $branch
-                    State     = $state
-                    Ahead     = $ahead
-                    Behind    = $behind
-                    IsDirty   = $dirty
-                }
-            }
-            finally {
-                Pop-Location
-            }
         }
 
         $total = $repoPaths.Count
-        $index = 0
-        foreach ($repoPath in $repoPaths) {
-            $index++
-            $repoName = Split-Path $repoPath -Leaf
-            $queue.Enqueue([PSCustomObject]@{
-                    Type    = "Progress"
-                    Value   = [math]::Round(($index / $total) * 100, 0)
-                    Message = "Syncing [$index/$total] $repoName"
-                })
+        $queue.Enqueue([PSCustomObject]@{ Type = "Total"; Value = $total })
 
-            try {
-                $before = Get-RepoStatus -RepoPath $repoPath
-
-                if ($before.IsDirty -and -not $includeDirty) {
-                    Write-QueueLog -Message "Skipped dirty repo: $repoName" -Level "WARN"
-                    $queue.Enqueue([PSCustomObject]@{
-                            Type   = "Repo"
-                            Record = (New-RepoRecord -RepoPath $repoPath -Branch $before.Branch -State "SkippedDirty" -Ahead $before.Ahead -Behind $before.Behind -Detail "Skipped dirty working tree" -IsDirty $before.IsDirty)
-                        })
-                    continue
-                }
-
-                if ($dryRun) {
-                    Write-QueueLog -Message "Dry run only: $repoName"
-                    $queue.Enqueue([PSCustomObject]@{
-                            Type   = "Repo"
-                            Record = (New-RepoRecord -RepoPath $repoPath -Branch $before.Branch -State "DryRun" -Ahead $before.Ahead -Behind $before.Behind -Detail "Dry run only" -IsDirty $before.IsDirty)
-                        })
-                    continue
-                }
-
-                Push-Location $repoPath
-                try {
-                    Write-QueueLog -Message "[CMD] git fetch --all --prune --progress ($repoName)"
-                    git fetch --all --prune --progress 2>&1 | ForEach-Object { Write-QueueLog -Message $_ }
-                    if ($LASTEXITCODE -ne 0) {
-                        throw "git fetch failed with exit code $LASTEXITCODE"
-                    }
-
-                    if (-not $fetchOnly) {
-                        Write-QueueLog -Message "[CMD] git pull --ff-only --progress ($repoName)"
-                        git pull --ff-only --progress 2>&1 | ForEach-Object { Write-QueueLog -Message $_ }
-                        if ($LASTEXITCODE -ne 0) {
-                            throw "git pull failed with exit code $LASTEXITCODE"
-                        }
-                    }
-                }
-                finally {
-                    Pop-Location
-                }
-
-                $after = Get-RepoStatus -RepoPath $repoPath
-                $finalState = if ($fetchOnly) { "Fetched" } else { "Synced" }
-                $finalDetail = if ($fetchOnly) { "Fetch completed" } else { "Sync completed" }
-                Write-QueueLog -Message "${finalState}: $repoName"
-                $queue.Enqueue([PSCustomObject]@{
-                        Type   = "Repo"
-                        Record = (New-RepoRecord -RepoPath $repoPath -Branch $after.Branch -State $finalState -Ahead $after.Ahead -Behind $after.Behind -Detail $finalDetail -IsDirty $after.IsDirty)
-                    })
-            }
-            catch {
-                Write-QueueLog -Message "Failed: $repoName - $($_.Exception.Message)" -Level "ERROR"
-                $queue.Enqueue([PSCustomObject]@{
-                        Type   = "Repo"
-                        Record = (New-RepoRecord -RepoPath $repoPath -Branch "unknown" -State "Failed" -Ahead 0 -Behind 0 -Detail $_.Exception.Message -IsDirty $false)
-                    })
-            }
+        if ($total -eq 0) {
+            $queue.Enqueue([PSCustomObject]@{ Type = "Done"; Message = "Sync complete." })
+            return
         }
 
-        $queue.Enqueue([PSCustomObject]@{
-                Type    = "Done"
-                Message = "Sync complete."
-            })
+        Log-Message "Syncing $total repositories in parallel ($maxParallel workers)."
+
+        $pool = [runspacefactory]::CreateRunspacePool(1, [Math]::Min($maxParallel, $total))
+        $pool.Open()
+        $jobs = New-Object System.Collections.ArrayList
+
+        foreach ($repoPath in $repoPaths) {
+            $ps = [PowerShell]::Create()
+            $ps.RunspacePool = $pool
+            $jobScript = {
+                param($repoPath, $includeDirty, $dryRun, $fetchOnly, $queue, $corePath)
+                . $corePath
+                try {
+                    $result = Invoke-SgtRepoSync -RepoPath $repoPath -IncludeDirty:$includeDirty -DryRun:$dryRun -FetchOnly:$fetchOnly
+
+                    $base = if ($result.After) { $result.After } else { $result.Before }
+                    $record = [PSCustomObject]@{
+                        Name    = $result.RepoName
+                        Branch  = $base.Branch
+                        Status  = $result.Status
+                        Ahead   = $base.Ahead
+                        Behind  = $base.Behind
+                        Detail  = $result.Detail
+                        Path    = $result.RepoPath
+                        IsDirty = $base.Dirty
+                    }
+                    $queue.Enqueue([PSCustomObject]@{ Type = "Repo"; Record = $record })
+                    $queue.Enqueue([PSCustomObject]@{
+                        Type      = "Log"
+                        Timestamp = (Get-Date -Format "HH:mm:ss")
+                        Level     = "INFO"
+                        Message   = "$($result.Status): $($result.RepoName)"
+                    })
+                }
+                catch {
+                    $record = [PSCustomObject]@{
+                        Name    = Split-Path $repoPath -Leaf
+                        Branch  = "unknown"
+                        Status  = "Failed"
+                        Ahead   = 0
+                        Behind  = 0
+                        Detail  = $_.Exception.Message
+                        Path    = $repoPath
+                        IsDirty = $false
+                    }
+                    $queue.Enqueue([PSCustomObject]@{ Type = "Repo"; Record = $record })
+                    $queue.Enqueue([PSCustomObject]@{
+                        Type      = "Log"
+                        Timestamp = (Get-Date -Format "HH:mm:ss")
+                        Level     = "ERROR"
+                        Message   = "Failed: $(Split-Path $repoPath -Leaf) - $($_.Exception.Message)"
+                    })
+                }
+            }
+            [void]$ps.AddScript($jobScript).AddArgument($repoPath).AddArgument($includeDirty).AddArgument($dryRun).AddArgument($fetchOnly).AddArgument($queue).AddArgument($corePath)
+            $handle = $ps.BeginInvoke()
+            [void]$jobs.Add([PSCustomObject]@{ PS = $ps; Handle = $handle })
+        }
+
+        foreach ($job in $jobs) {
+            try { $job.PS.EndInvoke($job.Handle) | Out-Null } catch { }
+            $job.PS.Dispose()
+        }
+
+        $pool.Close()
+        $pool.Dispose()
+
+        $queue.Enqueue([PSCustomObject]@{ Type = "Done"; Message = "Sync complete." })
     }
 
-    [void](Start-Worker -Mode "sync" -ScriptBlock $syncScript -Arguments @($repoPaths, $includeDirty, $dryRun, $fetchOnly, $Script:Queue))
+    [void](Start-Worker -Mode "sync" -ScriptBlock $syncScript -Arguments @($repoPaths, $includeDirty, $dryRun, $fetchOnly, $maxParallel, $Script:Queue, $Script:CoreScriptPath) -Total $repoPaths.Count)
 }
 
 function Open-SelectedRepository {
@@ -1046,7 +914,7 @@ Refresh-RecentFolders
 Update-Summary
 
 $Script:Timer = New-Object System.Windows.Threading.DispatcherTimer
-$Script:Timer.Interval = [TimeSpan]::FromMilliseconds(120)
+$Script:Timer.Interval = [TimeSpan]::FromMilliseconds(80)
 $Script:Timer.Add_Tick({ Process-Queue })
 $Script:Timer.Start()
 

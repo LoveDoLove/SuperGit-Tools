@@ -83,6 +83,7 @@ SuperGit-Tools is designed to solve the headache of managing multiple local Git 
 - **Real-Time Status**: Instantly see if repos are Clean, Dirty, Ahead, Behind, or Diverged.
 - **Modern UI**: Friendly Horizon-inspired light interface focused on operational clarity.
 - **Safer Sync**: Uses `git fetch --all --prune` and `git pull --ff-only`.
+- **Parallel Backend**: Rewritten core logic with parallel status and sync workers for smoother large-folder operations.
 - **Live Logs**: Streams operation logs directly in the GUI.
 - **Targeted Actions**: Sync all repositories or only the selected rows.
 - **Settings Persistence**: Remembers recent folders and scan depth.
