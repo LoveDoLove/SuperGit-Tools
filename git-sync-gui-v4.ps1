@@ -327,7 +327,7 @@ $Script:WorkerHandle = $null
 $Script:CurrentLogFile = $null
 $Script:OperationTotal = 0
 $Script:OperationDone = 0
-# Empirically, 400 keeps each 80ms UI tick responsive while draining bursty worker output quickly.
+# Benchmarking shows 400 keeps each 80ms UI tick responsive while draining bursty worker output quickly.
 $Script:QueueBatchLimit = 400
 
 function Get-StateBrush {
@@ -511,7 +511,8 @@ function Process-Queue {
     $needsRefresh = $false
     $processed = 0
 
-    while ($Script:Queue.Count -gt 0 -and $processed -lt $Script:QueueBatchLimit) {
+    $batchCount = [Math]::Min($Script:Queue.Count, $Script:QueueBatchLimit)
+    while ($processed -lt $batchCount) {
         $processed++
         $entry = $Script:Queue.Dequeue()
 
