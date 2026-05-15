@@ -167,7 +167,7 @@ function Add-RecentFolder {
                 </Grid.ColumnDefinitions>
                 <StackPanel>
                     <TextBlock Text="SuperGit Tools" FontSize="24" FontWeight="SemiBold" Foreground="{StaticResource TextBrush}" />
-                    <TextBlock Text="Friendly Horizon v4 - Fast backend rewrite" FontSize="13" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0" />
+                    <TextBlock Text="Friendly Horizon v4 - Parallel backend for improved performance" FontSize="13" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0" />
                 </StackPanel>
                 <Border Grid.Column="1" Background="#EAF2FF" CornerRadius="999" Padding="12,6" VerticalAlignment="Center">
                     <TextBlock Name="TxtLastRun" Text="Ready" Foreground="{StaticResource AccentDarkBrush}" FontWeight="SemiBold" />
@@ -327,6 +327,7 @@ $Script:WorkerHandle = $null
 $Script:CurrentLogFile = $null
 $Script:OperationTotal = 0
 $Script:OperationDone = 0
+# Process up to this many queue entries per UI tick to balance throughput and responsiveness.
 $Script:QueueBatchLimit = 400
 
 function Get-StateBrush {
