@@ -27,7 +27,7 @@
 <h3 align="center">SuperGit-Tools</h3>
 
   <p align="center">
-    A powerful suite of automated Git synchronization tools for Windows, featuring a robust CLI script and a modern, aesthetically pleasing WPF GUI (Friendly Horizon v3.0) for managing multiple repositories with ease.
+    A powerful suite of automated Git synchronization tools for Windows, featuring safer v4 CLI/GUI rewrites and Friendly Horizon-inspired PowerShell tooling for managing multiple repositories with ease.
     <br />
     <a href="https://github.com/LoveDoLove/SuperGit-Tools"><strong>Explore the docs »</strong></a>
     <br />
@@ -73,18 +73,19 @@
 
 SuperGit-Tools is designed to solve the headache of managing multiple local Git repositories. Whether you have 5 or 50 projects, keeping them all synchronized can be tedious. This project provides two powerful tools to automate this process:
 
-1.  **`git-sync-gui.ps1` (v3.0)**: A comprehensive GUI application built with PowerShell and WPF. It features the "Friendly Horizon" light theme, real-time status updates, asynchronous operations, and a rich set of management features.
-2.  **`git-sync.ps1` (v1.0)**: A clean, automation-focused CLI script for users who prefer the terminal.
+1.  **`git-sync-gui-v4.ps1` (v4.0)**: A rewritten Friendly Horizon GUI aligned with the safer v4 sync flow, live logs, recursive discovery, and clearer repository state reporting.
+2.  **`git-sync-v4.ps1` (v4.0)**: A safer CLI rewrite for recursive discovery and ff-only synchronization.
+3.  **Legacy scripts**: `git-sync-gui.ps1` (v3.0) and `git-sync.ps1` (v1.0) remain in the repository for compatibility.
 
-**Key Features (GUI v3.0):**
+**Key Features (GUI v4.0):**
 
 - **Auto-Discovery**: Recursively scans folders to find Git repositories.
 - **Real-Time Status**: Instantly see if repos are Clean, Dirty, Ahead, Behind, or Diverged.
-- **Modern UI**: Beautiful "Friendly Horizon" design with card-based layout and visual feedback.
-- **Async Operations**: All Git checks and syncs run in the background, keeping the UI responsive.
-- **Search & Filter**: Filter by status (e.g., "Show only Dirty repos") or search by name.
-- **Settings Persistence**: Remembers your preferences and recently used folders.
-- **Statistics Panel**: Quick overview of your repository health.
+- **Modern UI**: Friendly Horizon-inspired light interface focused on operational clarity.
+- **Safer Sync**: Uses `git fetch --all --prune` and `git pull --ff-only`.
+- **Live Logs**: Streams operation logs directly in the GUI.
+- **Targeted Actions**: Sync all repositories or only the selected rows.
+- **Settings Persistence**: Remembers recent folders and scan depth.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -130,16 +131,16 @@ To get a local copy up and running follow these simple steps.
 
 ### GUI Application
 
-Run the GUI script to launch the visual interface:
+Run the rewritten GUI script to launch the visual interface:
 
 ```powershell
-.\git-sync-gui.ps1
+.\git-sync-gui-v4.ps1
 ```
 
-- **Select Folder**: Choose the root folder containing your projects.
-- **Sync All**: Click "Sync All" to fetch and pull updates for all displayed repositories.
-- **Context Menu**: Right-click any repository card to Sync, Refresh, Open in Explorer, or Copy Path.
-- **Shortcuts**: `Ctrl+F` (Search), `Ctrl+R` (Refresh), `Ctrl+S` (Sync All).
+- **Browse Folder**: Choose the root folder containing your projects.
+- **Scan Repositories**: Recursively discover repos and compute current status.
+- **Sync All / Sync Selected**: Run the safer v4 sync flow from the GUI.
+- **Options**: `Include Dirty Repos`, `Dry Run`, and `Fetch Only`.
 
 ### CLI Tool
 
