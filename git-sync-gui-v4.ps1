@@ -327,7 +327,7 @@ $Script:WorkerHandle = $null
 $Script:CurrentLogFile = $null
 $Script:OperationTotal = 0
 $Script:OperationDone = 0
-# Process up to this many queue entries per UI tick to balance throughput and responsiveness.
+# Empirically, 400 keeps each 80ms UI tick responsive while draining bursty worker output quickly.
 $Script:QueueBatchLimit = 400
 
 function Get-StateBrush {
