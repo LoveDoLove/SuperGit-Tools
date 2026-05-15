@@ -76,8 +76,8 @@ function Get-RepoStatus {
 
 function Confirm-Sync {
     param([string]$RepoName)
-    $answer = Read-Host "Sync $RepoName ? [y/N]"
-    return $answer -match '^(y|yes)$'
+    $answer = Read-Host "Sync $RepoName? [y/N]"
+    return $answer -imatch '^(y|yes)$'
 }
 
 if (-not (Test-Path $RootFolder)) {
