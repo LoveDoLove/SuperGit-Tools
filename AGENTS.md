@@ -3,8 +3,8 @@
 ## Agent Identity
 - Project: **SuperGit-Tools**
 - App Design: **Friendly Horizon** (Light Theme)
-- CLI Tool: `git-sync.ps1`
-- GUI Tool: `git-sync-gui.ps1`
+- CLI Tool: `git-sync-v4.ps1`
+- GUI Tool: `git-sync-gui-v4.ps1`
 
 ## Long-Term Memory Mechanism
 

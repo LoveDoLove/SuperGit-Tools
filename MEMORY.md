@@ -2,9 +2,10 @@
 
 ## Project Goals
 - Keep SuperGit-Tools practical and stable for multi-repository Git synchronization on Windows.
-- Maintain both tools:
-  - CLI: `git-sync.ps1` (no GUI)
-  - GUI: `git-sync-gui.ps1` (Friendly Horizon Light Theme)
+- Maintain both primary v4 tools:
+  - CLI: `git-sync-v4.ps1` (no GUI)
+  - GUI: `git-sync-gui-v4.ps1` (Friendly Horizon Light Theme)
+- Keep legacy scripts available when compatibility is needed.
 
 ## Persistent Conventions
 - Preserve Friendly Horizon light-theme visual language in GUI changes.
