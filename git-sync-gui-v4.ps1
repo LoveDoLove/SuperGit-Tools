@@ -463,6 +463,8 @@ function Get-MaxDepthValue {
 }
 
 function Get-MaxParallelValue {
+    # Keep worker count practical: at least 2, at most 16, and prefer the larger value
+    # between CPU-based baseline and user-configured value for large repo sets.
     $cpuBound = [Math]::Max(2, [Environment]::ProcessorCount)
     $configured = [Math]::Max(2, [int]$Script:Settings.MaxParallel)
     return [Math]::Min(16, [Math]::Max($cpuBound, $configured))
@@ -917,6 +919,7 @@ Refresh-RecentFolders
 Update-Summary
 
 $Script:Timer = New-Object System.Windows.Threading.DispatcherTimer
+# Keep timer interval aligned with QueueBatchLimit tuning comment near script state.
 $Script:Timer.Interval = [TimeSpan]::FromMilliseconds(80)
 $Script:Timer.Add_Tick({ Process-Queue })
 $Script:Timer.Start()

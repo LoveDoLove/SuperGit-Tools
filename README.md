@@ -27,7 +27,7 @@
 <h3 align="center">SuperGit-Tools</h3>
 
   <p align="center">
-    A powerful suite of automated Git synchronization tools for Windows, featuring safer v4 CLI/GUI rewrites and Friendly Horizon-inspired PowerShell tooling for managing multiple repositories with ease.
+    A powerful suite of automated Git synchronization tools for Windows, featuring safer v4 CLI/GUI rewrites and Friendly Horizon light-theme PowerShell tooling for managing multiple repositories with ease.
     <br />
     <a href="https://github.com/LoveDoLove/SuperGit-Tools"><strong>Explore the docs »</strong></a>
     <br />
