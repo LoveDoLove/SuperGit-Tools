@@ -431,8 +431,8 @@ function Update-Summary {
     $Script:BtnRefresh.IsEnabled = $hasRepos -and -not $isBusy
     $Script:BtnSyncAll.IsEnabled = $hasRepos -and -not $isBusy
     $Script:BtnSyncSelected.IsEnabled = $hasSelection -and -not $isBusy
-    $Script:BtnOpenRepo.IsEnabled = ($hasSelection -eq $true)
-    $Script:BtnCopyPath.IsEnabled = ($hasSelection -eq $true)
+    $Script:BtnOpenRepo.IsEnabled = $hasSelection
+    $Script:BtnCopyPath.IsEnabled = $hasSelection
 }
 
 function Refresh-RecentFolders {
@@ -596,10 +596,13 @@ function Start-Scan {
             if (-not $HasUpstream) { return "No upstream configured" }
             if ($State -eq "Clean") { return "Up to date" }
             if ($State -eq "Dirty") { return "Uncommitted changes" }
+            if ($State -eq "DirtyNoUpstream") { return "Dirty working tree, no upstream" }
+            if ($State -eq "DirtyAhead") { return "Dirty, ahead $Ahead commits" }
+            if ($State -eq "DirtyBehind") { return "Dirty, behind $Behind commits" }
+            if ($State -eq "DirtyDiverged") { return "Dirty, ahead $Ahead / behind $Behind" }
             if ($State -eq "Ahead") { return "Ahead $Ahead commits" }
             if ($State -eq "Behind") { return "Behind $Behind commits" }
             if ($State -eq "Diverged") { return "Ahead $Ahead / Behind $Behind" }
-            if ($State -like "Dirty*") { return "Dirty, ahead $Ahead / behind $Behind" }
             return $State
         }
 
@@ -731,10 +734,13 @@ function Start-Refresh {
             if (-not $HasUpstream) { return "No upstream configured" }
             if ($State -eq "Clean") { return "Up to date" }
             if ($State -eq "Dirty") { return "Uncommitted changes" }
+            if ($State -eq "DirtyNoUpstream") { return "Dirty working tree, no upstream" }
+            if ($State -eq "DirtyAhead") { return "Dirty, ahead $Ahead commits" }
+            if ($State -eq "DirtyBehind") { return "Dirty, behind $Behind commits" }
+            if ($State -eq "DirtyDiverged") { return "Dirty, ahead $Ahead / behind $Behind" }
             if ($State -eq "Ahead") { return "Ahead $Ahead commits" }
             if ($State -eq "Behind") { return "Behind $Behind commits" }
             if ($State -eq "Diverged") { return "Ahead $Ahead / Behind $Behind" }
-            if ($State -like "Dirty*") { return "Dirty, ahead $Ahead / behind $Behind" }
             return $State
         }
 
