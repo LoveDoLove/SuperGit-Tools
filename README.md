@@ -149,6 +149,17 @@ Run the CLI script for a text-based interactive experience:
 .\git-sync.ps1 -ParentFolder "D:\Projects"
 ```
 
+New CLI rewrite (v4, safer + recursive discovery):
+
+```powershell
+.\git-sync-v4.ps1 -RootFolder "D:\Projects" -AutoConfirm
+```
+
+- `-AutoConfirm`: skip per-repo prompt
+- `-IncludeDirty`: allow syncing repos with uncommitted changes
+- `-DryRun`: preview only, no git changes
+- `-FetchOnly`: only fetch, no pull
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- ROADMAP -->
