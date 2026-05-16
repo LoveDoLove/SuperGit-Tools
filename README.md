@@ -108,8 +108,12 @@ To get a local copy up and running follow these simple steps.
 - **Windows OS**: The tools are designed for Windows.
 - **PowerShell 5.1+**: Pre-installed on most Windows systems.
 - **Git**: Must be installed and available in your system PATH.
+- **Python 3.9+**: Required by the v4 backend.
+- **uv**: Required to run the Python backend environment.
   ```sh
   git --version
+  python --version
+  uv --version
   ```
 
 ### Installation
@@ -123,6 +127,10 @@ To get a local copy up and running follow these simple steps.
     cd SuperGit-Tools
     ```
 3.  Ready to run! No additional dependencies are required as it uses standard .NET libraries available in PowerShell.
+4.  Install backend dependencies with uv:
+    ```sh
+    uv sync
+    ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
