@@ -31,7 +31,7 @@ function Get-SgtRepoPaths {
         [void]$repoPaths.Add($RootFolder)
     }
 
-    $gitDirs = Get-ChildItem -Path $RootFolder -Directory -Filter ".git" -Recurse -Depth $MaxDepth -ErrorAction SilentlyContinue
+    $gitDirs = Get-ChildItem -Path $RootFolder -Directory -Filter ".git" -Recurse -Depth $MaxDepth -Force -ErrorAction SilentlyContinue
     foreach ($gitDir in $gitDirs) {
         [void]$repoPaths.Add((Split-Path $gitDir.FullName -Parent))
     }
