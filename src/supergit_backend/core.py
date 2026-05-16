@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 
 
 def _run_git(repo_path: str, args: List[str]) -> subprocess.CompletedProcess:
+    """Run a git command in the given repository and return the completed process."""
     return subprocess.run(
         ["git", *args],
         cwd=repo_path,
@@ -165,6 +166,14 @@ def invoke_repo_sync(repo_path: str, include_dirty: bool, dry_run: bool, fetch_o
     after = get_repo_status(repo_path)
     result_state = "Fetched" if fetch_only else "Synced"
     result_detail = "Fetch completed" if fetch_only else "Sync completed"
+    changed = (
+        before["State"] != after["State"]
+        or before["Ahead"] != after["Ahead"]
+        or before["Behind"] != after["Behind"]
+        or before["Dirty"] != after["Dirty"]
+        or bool(fetch_output)
+        or bool(pull_output)
+    )
 
     return {
         "RepoPath": repo_path,
@@ -172,10 +181,9 @@ def invoke_repo_sync(repo_path: str, include_dirty: bool, dry_run: bool, fetch_o
         "Status": result_state,
         "Detail": result_detail,
         "Success": True,
-        "Changed": True,
+        "Changed": changed,
         "Before": before,
         "After": after,
         "FetchOutput": fetch_output,
         "PullOutput": pull_output,
     }
-
