@@ -5,6 +5,8 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List
 
+GIT_TIMEOUT_SECONDS = 180
+
 
 def _run_git(repo_path: str, args: List[str]) -> subprocess.CompletedProcess:
     """Run a git command in the given repository and return the completed process."""
@@ -13,6 +15,7 @@ def _run_git(repo_path: str, args: List[str]) -> subprocess.CompletedProcess:
         cwd=repo_path,
         capture_output=True,
         text=True,
+        timeout=GIT_TIMEOUT_SECONDS,
     )
 
 
@@ -156,7 +159,8 @@ def invoke_repo_sync(repo_path: str, include_dirty: bool, dry_run: bool, fetch_o
     fetch_output_text = (fetch_proc.stdout or "") + (fetch_proc.stderr or "")
     fetch_output = [line for line in fetch_output_text.splitlines() if line]
     if fetch_proc.returncode != 0:
-        raise RuntimeError(f"git fetch failed with exit code {fetch_proc.returncode}")
+        detail = fetch_output[0] if fetch_output else "no output"
+        raise RuntimeError(f"git fetch failed with exit code {fetch_proc.returncode}: {detail}")
 
     pull_output: List[str] = []
     if not fetch_only:
@@ -164,7 +168,8 @@ def invoke_repo_sync(repo_path: str, include_dirty: bool, dry_run: bool, fetch_o
         pull_output_text = (pull_proc.stdout or "") + (pull_proc.stderr or "")
         pull_output = [line for line in pull_output_text.splitlines() if line]
         if pull_proc.returncode != 0:
-            raise RuntimeError(f"git pull failed with exit code {pull_proc.returncode}")
+            detail = pull_output[0] if pull_output else "no output"
+            raise RuntimeError(f"git pull failed with exit code {pull_proc.returncode}: {detail}")
 
     after = get_repo_status(repo_path)
     result_state = "Fetched" if fetch_only else "Synced"

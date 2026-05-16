@@ -5,9 +5,16 @@ function Get-SgtBackendCommand {
         return @("uv", "run", "--project", $PSScriptRoot, "python", "-m", "supergit_backend.cli")
     }
 
-    $uvUserPath = Join-Path $HOME ".local/bin/uv"
-    if (Test-Path -LiteralPath $uvUserPath) {
-        return @($uvUserPath, "run", "--project", $PSScriptRoot, "python", "-m", "supergit_backend.cli")
+    $uvCandidatePaths = @(
+        (Join-Path $HOME ".local/bin/uv"),
+        (Join-Path $HOME ".cargo/bin/uv"),
+        (Join-Path $HOME "AppData/Local/Programs/uv/uv.exe")
+    )
+
+    foreach ($uvPath in $uvCandidatePaths) {
+        if (Test-Path -LiteralPath $uvPath) {
+            return @($uvPath, "run", "--project", $PSScriptRoot, "python", "-m", "supergit_backend.cli")
+        }
     }
 
     throw "uv is not available in PATH."
