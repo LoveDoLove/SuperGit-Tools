@@ -42,6 +42,7 @@ function Invoke-SgtBackend {
     }
 
     $convertFromJson = Get-Command ConvertFrom-Json -ErrorAction Stop
+    # Windows PowerShell 5.1 has no -Depth on ConvertFrom-Json.
     if ($convertFromJson.Parameters.ContainsKey("Depth")) {
         return ($jsonText | ConvertFrom-Json -Depth 20)
     }
