@@ -41,7 +41,12 @@ function Invoke-SgtBackend {
         throw "Backend returned empty response."
     }
 
-    return ($jsonText | ConvertFrom-Json -Depth 20)
+    $convertFromJson = Get-Command ConvertFrom-Json -ErrorAction Stop
+    if ($convertFromJson.Parameters.ContainsKey("Depth")) {
+        return ($jsonText | ConvertFrom-Json -Depth 20)
+    }
+
+    return ($jsonText | ConvertFrom-Json)
 }
 
 function Test-SgtGitAvailable {
