@@ -29,14 +29,12 @@ function Invoke-SgtBackend {
 
     $pythonPathBackup = $env:PYTHONPATH
     try {
-        if ($exe -eq "python") {
-            $srcPath = Join-Path $PSScriptRoot "src"
-            if ([string]::IsNullOrWhiteSpace($pythonPathBackup)) {
-                $env:PYTHONPATH = $srcPath
-            }
-            else {
-                $env:PYTHONPATH = "$srcPath$([IO.Path]::PathSeparator)$pythonPathBackup"
-            }
+        $srcPath = Join-Path $PSScriptRoot "src"
+        if ([string]::IsNullOrWhiteSpace($pythonPathBackup)) {
+            $env:PYTHONPATH = $srcPath
+        }
+        else {
+            $env:PYTHONPATH = "$srcPath$([IO.Path]::PathSeparator)$pythonPathBackup"
         }
 
         $output = & $exe @baseArgs @Arguments 2>&1

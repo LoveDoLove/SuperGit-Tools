@@ -4,7 +4,7 @@ import argparse
 import json
 import sys
 
-from .core import get_repo_paths, get_repo_status, invoke_repo_sync, test_git_available
+from supergit_backend.core import get_repo_paths, get_repo_status, invoke_repo_sync, test_git_available
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -55,4 +55,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
