@@ -10,11 +10,7 @@ function Get-SgtBackendCommand {
         return @($uvUserPath, "run", "--project", $PSScriptRoot, "python", "-m", "supergit_backend.cli")
     }
 
-    if (Get-Command python -ErrorAction SilentlyContinue) {
-        return @("python", "-m", "supergit_backend.cli")
-    }
-
-    throw "Neither uv nor python is available in PATH."
+    throw "uv is not available in PATH."
 }
 
 function Invoke-SgtBackend {
@@ -27,32 +23,18 @@ function Invoke-SgtBackend {
     $exe = $commandParts[0]
     $baseArgs = @($commandParts | Select-Object -Skip 1)
 
-    $pythonPathBackup = $env:PYTHONPATH
-    try {
-        $srcPath = Join-Path $PSScriptRoot "src"
-        if ([string]::IsNullOrWhiteSpace($pythonPathBackup)) {
-            $env:PYTHONPATH = $srcPath
-        }
-        else {
-            $env:PYTHONPATH = "$srcPath$([IO.Path]::PathSeparator)$pythonPathBackup"
-        }
-
-        $output = & $exe @baseArgs @Arguments 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            $message = if ($output) { ($output -join [Environment]::NewLine) } else { "Backend execution failed." }
-            throw $message
-        }
-
-        $jsonText = ($output -join "`n").Trim()
-        if ([string]::IsNullOrWhiteSpace($jsonText)) {
-            throw "Backend returned empty response."
-        }
-
-        return ($jsonText | ConvertFrom-Json -Depth 20)
+    $output = & $exe @baseArgs @Arguments 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $message = if ($output) { ($output -join [Environment]::NewLine) } else { "Backend execution failed." }
+        throw $message
     }
-    finally {
-        $env:PYTHONPATH = $pythonPathBackup
+
+    $jsonText = ($output -join "`n").Trim()
+    if ([string]::IsNullOrWhiteSpace($jsonText)) {
+        throw "Backend returned empty response."
     }
+
+    return ($jsonText | ConvertFrom-Json -Depth 20)
 }
 
 function Test-SgtGitAvailable {

@@ -174,8 +174,6 @@ def invoke_repo_sync(repo_path: str, include_dirty: bool, dry_run: bool, fetch_o
         or before["Ahead"] != after["Ahead"]
         or before["Behind"] != after["Behind"]
         or before["Dirty"] != after["Dirty"]
-        or bool(fetch_output)
-        or bool(pull_output)
     )
 
     return {
