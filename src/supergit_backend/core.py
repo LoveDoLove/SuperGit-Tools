@@ -25,6 +25,7 @@ def test_git_available() -> bool:
 
 
 def get_repo_paths(root_folder: str, max_depth: int = 5) -> List[str]:
+    """Recursively discover repositories by locating `.git` directories up to max depth."""
     root = Path(root_folder)
     if not root.exists():
         raise RuntimeError(f"Root folder not found: {root_folder}")
@@ -69,6 +70,7 @@ def _repo_detail(state: str, ahead: int, behind: int, has_upstream: bool) -> str
 
 
 def get_repo_status(repo_path: str) -> Dict[str, Any]:
+    """Return repository branch, dirty/upstream state, ahead/behind counts, and summary detail."""
     branch_proc = _run_git(repo_path, ["rev-parse", "--abbrev-ref", "HEAD"])
     if branch_proc.returncode != 0:
         raise RuntimeError(branch_proc.stderr.strip() or branch_proc.stdout.strip() or "Unable to resolve branch")
@@ -119,6 +121,7 @@ def get_repo_status(repo_path: str) -> Dict[str, Any]:
 
 
 def invoke_repo_sync(repo_path: str, include_dirty: bool, dry_run: bool, fetch_only: bool) -> Dict[str, Any]:
+    """Run fetch/pull sync logic for one repository and return before/after status plus command output."""
     before = get_repo_status(repo_path)
 
     if before["Dirty"] and not include_dirty:
