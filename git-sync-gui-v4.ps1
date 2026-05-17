@@ -417,8 +417,8 @@ function Upsert-RepoItem {
 
 function Update-Summary {
     $total = $Script:RepoItems.Count
-    $dirty = ($Script:RepoItems | Where-Object { $_.IsDirty }).Count
-    $failed = ($Script:RepoItems | Where-Object { $_.Status -in @("Failed", "Error") }).Count
+    $dirty = @($Script:RepoItems | Where-Object { $_.IsDirty }).Count
+    $failed = @($Script:RepoItems | Where-Object { $_.Status -in @("Failed", "Error") }).Count
     $selected = @($Script:RepoGrid.SelectedItems).Count
 
     $Script:TxtTotalRepos.Text = $total.ToString()
