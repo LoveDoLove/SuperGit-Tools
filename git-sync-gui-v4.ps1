@@ -274,13 +274,15 @@ function Initialize-AsyncInfrastructure {
         $ps = [PowerShell]::Create()
         $ps.RunspacePool = $Script:RunspacePool
         $ps.AddScript($RunspaceInitScript).AddArgument($BackendPath) | Out-Null
-        $Handles += $ps.BeginInvoke()
+        $Handles += @{ PowerShell = $ps; Handle = $ps.BeginInvoke() }
     }
     
     # Wait for all initializations to complete
-    foreach ($Handle in $Handles) {
+    foreach ($Item in $Handles) {
         try {
-            $Handle.AsyncWaitHandle.WaitOne() | Out-Null
+            $Item.Handle.AsyncWaitHandle.WaitOne() | Out-Null
+            $Item.PowerShell.EndInvoke($Item.Handle) | Out-Null
+            $Item.PowerShell.Dispose()
         } catch { }
     }
     
@@ -294,22 +296,26 @@ function Initialize-AsyncInfrastructure {
 
 function Process-AllQueues {
     # Process log queue
+    $logEntry = $null
     while ($Script:LogQueue.TryDequeue([ref]$logEntry)) {
         $Script:Window.FindName("LogOutput").AppendText($logEntry + "`n")
         $Script:Window.FindName("LogOutput").ScrollToEnd()
     }
     
     # Process status queue
+    $statusItem = $null
     while ($Script:StatusQueue.TryDequeue([ref]$statusItem)) {
         Update-RepositoryStatus $statusItem
     }
     
     # Process sync queue
+    $syncItem = $null
     while ($Script:SyncQueue.TryDequeue([ref]$syncItem)) {
         Complete-SyncOperation $syncItem
     }
     
     # Process scan queue
+    $scanItem = $null
     while ($Script:ScanQueue.TryDequeue([ref]$scanItem)) {
         Complete-ScanOperation $scanItem
     }
@@ -318,6 +324,29 @@ function Process-AllQueues {
 # ============================================================================
 # SECTION 6: Logging and Statistics
 # ============================================================================
+
+function Get-SafeLogPath {
+    param(
+        [string]$BasePath = $null
+    )
+    
+    if (-not $BasePath) {
+        $BasePath = $Script:Settings.LastFolder
+    }
+    if (-not $BasePath) {
+        $BasePath = $env:USERPROFILE
+    }
+    
+    $ParentPath = Split-Path $BasePath
+    if (-not $ParentPath -or $ParentPath -eq $BasePath) {
+        $ParentPath = $BasePath
+        $FolderName = [System.IO.Path]::GetFileName($BasePath)
+    } else {
+        $FolderName = Split-Path $BasePath -Leaf
+    }
+    
+    return Join-Path $ParentPath "$(Get-Date -Format 'yyyy-MM-dd')-$FolderName.log"
+}
 
 function Write-Log {
     param(
@@ -331,11 +360,7 @@ function Write-Log {
     $Script:LogQueue.Enqueue($LogEntry)
     
     if ($Script:Settings.LogToFile) {
-        $LastFolder = $Script:Settings.LastFolder
-        if (-not $LastFolder) {
-            $LastFolder = $env:USERPROFILE
-        }
-        $LogPath = Join-Path (Split-Path $LastFolder) "$(Get-Date -Format 'yyyy-MM-dd')-$(Split-Path $LastFolder -Leaf).log"
+        $LogPath = Get-SafeLogPath
         Add-Content $LogPath $LogEntry -ErrorAction SilentlyContinue
     }
 }
@@ -683,7 +708,7 @@ function Register-EventHandlers {
     $Window.Add_Closing({
         $Script:Settings.WindowWidth = $Window.Width
         $Script:Settings.WindowHeight = $Window.Height
-        Save-Settings
+        Set-Settings
         $Script:QueueTimer.Stop()
     })
 }
