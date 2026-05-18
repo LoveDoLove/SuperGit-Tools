@@ -35,16 +35,20 @@
 ### Architecture & Integration
 
 **Fact:** v4 CLI and GUI share common git logic via `git-sync-core-v4.ps1` for repo discovery, status evaluation, and sync primitives.  
-**Source:** `git-sync-v4.ps1:15`, `git-sync-gui-v4.ps1:16`, `git-sync-core-v4.ps1:13`  
+**Source:** `git-sync-core-v4.ps1:13-80`, `git-sync-gui-v4.ps1:41-60`  
 **Applies To:** New features should extend the core module rather than duplicating logic  
 
-**Fact:** v4 core PowerShell functions execute a uv-run Python backend module `supergit_backend.cli` for git availability, discovery, status, and sync.  
-**Source:** `git-sync-core-v4.ps1:3, 47, 52, 64, 73`  
-**Applies To:** Git operations should leverage the Python backend  
+**Fact:** v4 core PowerShell functions execute a Python backend module `supergit_backend.cli` for git availability, discovery, status, and sync via JSON inter-process communication.  
+**Source:** `git-sync-core-v4.ps1:80-120`, `src/supergit_backend/cli.py:1-150`  
+**Applies To:** Git operations should leverage the Python backend, not direct git commands  
 
 **Fact:** Project includes a uv-managed Python package backend (`supergit-tools-backend`) built with hatchling from `src/supergit_backend`; setup uses `uv sync`.  
-**Source:** `pyproject.toml:1-11`, `README.md:111-112, 130`  
+**Source:** `pyproject.toml:1-11`, setup.bat, setup.sh  
 **Applies To:** Python dependency management and backend development  
+
+**Fact:** v4 GUI context menu operations use async RunspacePool instead of synchronous execution - this prevents UI freezing during git operations.  
+**Source:** `git-sync-gui-v4.ps1:250-280` (SyncRepositoryAsync function)  
+**Applies To:** All interactive user actions must use RunspacePool for non-blocking execution  
 
 ### Skill Package Standards
 
