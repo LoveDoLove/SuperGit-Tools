@@ -27,7 +27,7 @@
 <h3 align="center">SuperGit-Tools</h3>
 
   <p align="center">
-    A powerful suite of automated Git synchronization tools for Windows, featuring a robust CLI script and a modern, aesthetically pleasing WPF GUI (Friendly Horizon v3.0) for managing multiple repositories with ease.
+    A powerful suite of automated Git synchronization tools for Windows, featuring a robust CLI script and a modern, aesthetically pleasing WPF GUI (Friendly Horizon v4.0) with Python backend for managing multiple repositories with zero UI freezing.
     <br />
     <a href="https://github.com/LoveDoLove/SuperGit-Tools"><strong>Explore the docs »</strong></a>
     <br />
@@ -108,8 +108,12 @@ To get a local copy up and running follow these simple steps.
   ```sh
   git --version
   ```
+- **Python 3.8+**: Required for v4.0+ backend (optional for v3.0 legacy mode)
+- **uv Package Manager**: For managing Python dependencies (automatically installed if missing)
 
 ### Installation
+
+**V4.0+ (Recommended - With Python Backend)**
 
 1.  Clone the repository
     ```sh
@@ -119,7 +123,15 @@ To get a local copy up and running follow these simple steps.
     ```sh
     cd SuperGit-Tools
     ```
-3.  Ready to run! No additional dependencies are required as it uses standard .NET libraries available in PowerShell.
+3.  Run the setup script
+    - **Windows**: `setup.bat`
+    - **Linux/macOS**: `bash setup.sh`
+
+**V3.0 Legacy (No Backend Required)**
+
+If you prefer the pure PowerShell version without Python backend:
+- Use `git-sync-gui-v3.ps1.bak` (keep as backup)
+- No setup required, just run directly
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -127,18 +139,27 @@ To get a local copy up and running follow these simple steps.
 
 ## Usage
 
-### GUI Application
+### GUI Application (V4.0+)
 
 Run the GUI script to launch the visual interface:
 
 ```powershell
-.\git-sync-gui.ps1
+.\git-sync-gui-v4.ps1
 ```
 
+**Features:**
 - **Select Folder**: Choose the root folder containing your projects.
 - **Sync All**: Click "Sync All" to fetch and pull updates for all displayed repositories.
-- **Context Menu**: Right-click any repository card to Sync, Refresh, Open in Explorer, or Copy Path.
-- **Shortcuts**: `Ctrl+F` (Search), `Ctrl+R` (Refresh), `Ctrl+S` (Sync All).
+- **Context Menu**: Right-click any repository card to:
+  - Sync This Repository (async, no UI freeze)
+  - Refresh Status
+  - Open in Explorer
+  - Open in PowerShell
+  - Copy Path
+- **Shortcuts**: `Ctrl+F` (Search), `Ctrl+R` (Refresh), `Ctrl+S` (Sync All), `Ctrl+L` (Logs)
+- **Settings**: Adjust max parallel operations and log retention
+
+**Zero UI Freezing:** All git operations run asynchronously in background threads via the Python backend.
 
 ### CLI Tool
 
