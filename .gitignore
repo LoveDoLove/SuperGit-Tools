@@ -400,6 +400,11 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 
+# AI Memory - Temporary Daily Logs
+# Keep MEMORY.md, memory/tasks.md, but exclude daily logs
+memory/YYYY-MM-DD.md
+memory/20[0-9][0-9]-[0-1][0-9]-[0-3][0-9].md
+
 # Hide
 Output
 install_rooflow.cmd
